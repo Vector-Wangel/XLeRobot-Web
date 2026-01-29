@@ -3,15 +3,15 @@
   <a href="https://vector-wangel.github.io/XLeRobot-Web/"><img src="https://github.com/user-attachments/assets/dfb13107-02b8-468d-ac18-3ea1fa3ec46d" href></a>
 </p>
 <p align="left">
-  <a href="https://github.com/zalo/mujoco_wasm/deployments/activity_log?environment=github-pages">
-      <img src="https://img.shields.io/github/deployments/zalo/mujoco_wasm/github-pages?label=Github%20Pages%20Deployment" title="Github Pages Deployment"></a>
+  <a href="https://vector-wangel.github.io/XLeRobot-Web/deployments/activity_log?environment=github-pages">
+      <img src="https://vector-wangel.github.io/XLeRobot-Web/github-pages?label=Github%20Pages%20Deployment" title="Github Pages Deployment"></a>
   <!--<a href="https://github.com/zalo/mujoco_wasm/deployments/activity_log?environment=Production">
       <img src="https://img.shields.io/github/deployments/zalo/mujoco_wasm/Production?label=Vercel%20Deployment" title="Vercel Deployment"></a> -->
   <!--<a href="https://lgtm.com/projects/g/zalo/mujoco_wasm/context:javascript">
       <img alt="Language grade: JavaScript" src="https://img.shields.io/lgtm/grade/javascript/g/zalo/mujoco_wasm.svg?logo=lgtm&logoWidth=18"/></a> -->
-  <a href="https://github.com/zalo/mujoco_wasm/commits/main">
+  <a href="https://vector-wangel.github.io/XLeRobot-Web/commits/main">
       <img src="https://img.shields.io/github/last-commit/zalo/mujoco_wasm" title="Last Commit Date"></a>
-  <a href="https://github.com/zalo/mujoco_wasm/blob/main/LICENSE">
+  <a href="https://vector-wangel.github.io/XLeRobot-Web/blob/main/LICENSE">
       <img src="https://img.shields.io/badge/license-MIT-brightgreen" title="License: MIT"></a>
 </p>
 
@@ -65,5 +65,6 @@ mujoco.mj_applyFT(model, data, [fx, fy, fz], [tx, ty, tz], [px, py, pz], bodyId,
 data.delete();
 model.delete();
 ```
+
 
 
