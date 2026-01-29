@@ -27,10 +27,10 @@ export function setupGUI(parentContext) {
   // Add scene selection dropdown.
   let reload = reloadFunc.bind(parentContext);
   parentContext.gui.add(parentContext.params, 'scene', {
-    "Humanoid": "humanoid.xml", "Cassie": "agility_cassie/scene.xml",
-    "Hammock": "hammock.xml", "Balloons": "balloons.xml", "Hand": "shadow_hand/scene_right.xml",
-    "Mug": "mug.xml", "Tendon": "model_with_tendon.xml",
-    "Torture Model": "model.xml", "Flex": "flex.xml", "Car": "car.xml", 
+    "Humanoid": "humanoid.xml", 
+    "Cassie": "agility_cassie/scene.xml",
+    "XLeRobot": "xlerobot/scene.xml",
+    "Hand": "shadow_hand/scene_right.xml",
   }).name('Example Scene').onChange(reload);
 
   // Add a help menu.
@@ -639,64 +639,17 @@ export function drawTendonsAndFlex(mujocoRoot, model, data) {
 /** Downloads the scenes/assets folder to MuJoCo's virtual filesystem
  * @param {mujoco} mujoco */
 export async function downloadExampleScenesFolder(mujoco) {
-  let allFiles = [
-    "22_humanoids.xml",
-    "adhesion.xml",
-    "agility_cassie/assets/achilles-rod.obj",
-    "agility_cassie/assets/cassie-texture.png",
-    "agility_cassie/assets/foot-crank.obj",
-    "agility_cassie/assets/foot.obj",
-    "agility_cassie/assets/heel-spring.obj",
-    "agility_cassie/assets/hip-pitch.obj",
-    "agility_cassie/assets/hip-roll.obj",
-    "agility_cassie/assets/hip-yaw.obj",
-    "agility_cassie/assets/knee-spring.obj",
-    "agility_cassie/assets/knee.obj",
-    "agility_cassie/assets/pelvis.obj",
-    "agility_cassie/assets/plantar-rod.obj",
-    "agility_cassie/assets/shin.obj",
-    "agility_cassie/assets/tarsus.obj",
-    "agility_cassie/cassie.xml",
-    "agility_cassie/scene.xml",
-    "arm26.xml",
-    "balloons.xml",
-    "car.xml",
-    "flex.xml",
-    "hammock.xml",
-    "humanoid.xml",
-    "humanoid_body.xml",
-    "model.xml",
-    "mug.obj",
-    "mug.png",
-    "mug.xml",
-    "scene.xml",
-    "shadow_hand/assets/f_distal_pst.obj",
-    "shadow_hand/assets/f_knuckle.obj",
-    "shadow_hand/assets/f_middle.obj",
-    "shadow_hand/assets/f_proximal.obj",
-    "shadow_hand/assets/forearm_0.obj",
-    "shadow_hand/assets/forearm_1.obj",
-    "shadow_hand/assets/forearm_collision.obj",
-    "shadow_hand/assets/lf_metacarpal.obj",
-    "shadow_hand/assets/mounting_plate.obj",
-    "shadow_hand/assets/palm.obj",
-    "shadow_hand/assets/th_distal_pst.obj",
-    "shadow_hand/assets/th_middle.obj",
-    "shadow_hand/assets/th_proximal.obj",
-    "shadow_hand/assets/wrist.obj",
-    "shadow_hand/left_hand.xml",
-    "shadow_hand/right_hand.xml",
-    "shadow_hand/scene_left.xml",
-    "shadow_hand/scene_right.xml",
-    "simple.xml",
-    "slider_crank.xml",
-    "model_with_tendon.xml",
-  ];
+  // Load file list from index.json
+  const indexResponse = await fetch("./assets/scenes/index.json");
+  const allFiles = await indexResponse.json();
+  
+  // Convert Windows-style paths to forward slashes for web
+  const normalizedFiles = allFiles.map(file => file.replace(/\\/g, "/"));
 
-  let requests = allFiles.map((url) => fetch("./assets/scenes/" + url));
+  let requests = normalizedFiles.map((url) => fetch("./assets/scenes/" + url));
   let responses = await Promise.all(requests);
   for (let i = 0; i < responses.length; i++) {
-      let split = allFiles[i].split("/");
+      let split = normalizedFiles[i].split("/");
       let working = '/working/';
       for (let f = 0; f < split.length - 1; f++) {
           working += split[f];
@@ -704,10 +657,10 @@ export async function downloadExampleScenesFolder(mujoco) {
           working += "/";
       }
 
-      if (allFiles[i].endsWith(".png") || allFiles[i].endsWith(".stl") || allFiles[i].endsWith(".skn")) {
-          mujoco.FS.writeFile("/working/" + allFiles[i], new Uint8Array(await responses[i].arrayBuffer()));
+      if (normalizedFiles[i].endsWith(".png") || normalizedFiles[i].endsWith(".stl") || normalizedFiles[i].endsWith(".skn") || normalizedFiles[i].endsWith(".obj") || normalizedFiles[i].endsWith(".ply")) {
+          mujoco.FS.writeFile("/working/" + normalizedFiles[i], new Uint8Array(await responses[i].arrayBuffer()));
       } else {
-          mujoco.FS.writeFile("/working/" + allFiles[i], await responses[i].text());
+          mujoco.FS.writeFile("/working/" + normalizedFiles[i], await responses[i].text());
       }
   }
 }
