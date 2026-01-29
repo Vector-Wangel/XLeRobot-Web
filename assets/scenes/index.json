@@ -1,5 +1,4 @@
 [
-  "22_humanoids.xml",
   "agility_cassie\\assets\\achilles-rod.obj",
   "agility_cassie\\assets\\cassie-texture.png",
   "agility_cassie\\assets\\foot-crank.obj",
@@ -17,7 +16,6 @@
   "agility_cassie\\cassie.xml",
   "agility_cassie\\scene.xml",
   "humanoid.xml",
-  "humanoid_body.xml",
   "shadow_hand\\assets\\f_distal_pst.obj",
   "shadow_hand\\assets\\f_knuckle.obj",
   "shadow_hand\\assets\\f_middle.obj",
