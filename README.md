@@ -1,5 +1,6 @@
 <p align="center">
-  <a href="https://zalo.github.io/mujoco_wasm/"><img src="./assets/MuJoCoWasmLogo.png" href></a>
+
+  <a href="https://vector-wangel.github.io/XLeRobot-Web/"><img src="https://github.com/user-attachments/assets/dfb13107-02b8-468d-ac18-3ea1fa3ec46d" href></a>
 </p>
 <p align="left">
   <a href="https://github.com/zalo/mujoco_wasm/deployments/activity_log?environment=github-pages">
@@ -64,4 +65,5 @@ mujoco.mj_applyFT(model, data, [fx, fy, fz], [tx, ty, tz], [px, py, pz], bodyId,
 data.delete();
 model.delete();
 ```
+
 
