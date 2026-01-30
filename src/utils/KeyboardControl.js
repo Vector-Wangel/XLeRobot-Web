@@ -138,14 +138,14 @@ class XLeRobotController {
 
     // Set initial joint positions
     // Left arm
-    this.state.targetJoints[2] = 0;  // Rotation_L (-90 degrees)
+    this.state.targetJoints[2] = -1.5708;  // Rotation_L (-90 degrees)
     this.state.targetJoints[3] = j2;   // Pitch_L
     this.state.targetJoints[4] = j3;   // Elbow_L
     this.state.targetJoints[5] = j2 - j3;  // Wrist_Pitch_L (compensation)
     this.state.targetJoints[6] = 1.57;  // Wrist_Roll_L
 
     // Right arm
-    this.state.targetJoints[8] = 0;   // Rotation_R (+90 degrees)
+    this.state.targetJoints[8] = 1.5708;   // Rotation_R (+90 degrees)
     this.state.targetJoints[9] = j2;    // Pitch_R
     this.state.targetJoints[10] = j3;   // Elbow_R
     this.state.targetJoints[11] = j2 - j3;  // Wrist_Pitch_R (compensation)
@@ -207,9 +207,9 @@ class XLeRobotController {
     // ========================================
 
     // Forward/Backward (W/S)
-    if (keyStates['KeyW']) {
+    if (keyStates['KeyS']) {
       data.ctrl[0] = this.BASE_SPEED;
-    } else if (keyStates['KeyS']) {
+    } else if (keyStates['KeyW']) {
       data.ctrl[0] = -this.BASE_SPEED;
     } else {
       data.ctrl[0] = 0;
