@@ -1,7 +1,7 @@
 <mujoco model="xlerobot">
-  <option timestep="0.002" noslip_iterations="3">
+  <!-- <option timestep="0.002" noslip_iterations="3">
     <flag multiccd="enable"/>
-  </option>
+  </option> -->
 
   <compiler angle="radian" meshdir="./meshes/"/>
 
