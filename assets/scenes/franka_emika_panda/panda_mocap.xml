@@ -13,7 +13,8 @@
   </worldbody>
 
   <!-- Weld constraint: end-effector follows mocap body -->
+  <!-- relpose: offset from hand origin to fingertip (0, 0, 0.103) in hand frame -->
   <equality>
-    <weld body1="hand" body2="target" solref="0.01 1" solimp="0.9 0.95 0.001"/>
+    <weld body1="hand" body2="target" relpose="0 0 0.103 1 0 0 0" solref="0.01 1" solimp="0.9 0.95 0.001"/>
   </equality>
 </mujoco>

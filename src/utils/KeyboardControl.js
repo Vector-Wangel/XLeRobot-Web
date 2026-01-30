@@ -518,6 +518,33 @@ class PandaController {
   initialize(model, data) {
     this._initState();
 
+    // Find hand body ID and read its actual position/orientation
+    const handBodyId = this._getBodyId(model, 'hand');
+    if (handBodyId >= 0) {
+      // Read hand's world position from xpos (3 values per body)
+      const handPos = [
+        data.xpos[handBodyId * 3],
+        data.xpos[handBodyId * 3 + 1],
+        data.xpos[handBodyId * 3 + 2]
+      ];
+      // Read hand's world orientation from xquat (4 values per body)
+      const handQuat = [
+        data.xquat[handBodyId * 4],     // w
+        data.xquat[handBodyId * 4 + 1], // x
+        data.xquat[handBodyId * 4 + 2], // y
+        data.xquat[handBodyId * 4 + 3]  // z
+      ];
+
+      // Calculate tip position: hand position + rotated offset (0, 0, 0.103)
+      const tipOffset = this._rotateVector([0, 0, 0.103], handQuat);
+      this.state.pos = [
+        handPos[0] + tipOffset[0],
+        handPos[1] + tipOffset[1],
+        handPos[2] + tipOffset[2]
+      ];
+      this.state.quat = handQuat;
+    }
+
     // Set initial mocap position and orientation
     this._applyMocapState(data);
 
@@ -525,6 +552,47 @@ class PandaController {
     data.ctrl[this.GRIPPER_ACTUATOR_IDX] = this.GRIPPER_CLOSED;
 
     this.initialized = true;
+  }
+
+  /**
+   * Get body ID by name
+   * @param {object} model - MuJoCo model
+   * @param {string} name - Body name
+   * @returns {number} Body ID or -1 if not found
+   */
+  _getBodyId(model, name) {
+    for (let i = 0; i < model.nbody; i++) {
+      const nameAddr = model.name_bodyadr[i];
+      let bodyName = '';
+      for (let j = nameAddr; model.names[j] !== 0; j++) {
+        bodyName += String.fromCharCode(model.names[j]);
+      }
+      if (bodyName === name) return i;
+    }
+    return -1;
+  }
+
+  /**
+   * Rotate a vector by a quaternion
+   * @param {number[]} v - Vector [x, y, z]
+   * @param {number[]} q - Quaternion [w, x, y, z]
+   * @returns {number[]} Rotated vector
+   */
+  _rotateVector(v, q) {
+    const [w, qx, qy, qz] = q;
+    const [vx, vy, vz] = v;
+
+    // q * v * q^-1
+    const t = [
+      2 * (qy * vz - qz * vy),
+      2 * (qz * vx - qx * vz),
+      2 * (qx * vy - qy * vx)
+    ];
+    return [
+      vx + w * t[0] + qy * t[2] - qz * t[1],
+      vy + w * t[1] + qz * t[0] - qx * t[2],
+      vz + w * t[2] + qx * t[1] - qy * t[0]
+    ];
   }
 
   /**
