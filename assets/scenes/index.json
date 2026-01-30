@@ -1,6 +1,7 @@
 [
   "humanoid.xml",
   "franka_emika_panda/scene.xml",
+  "franka_emika_panda/panda_mocap.xml",
   "franka_emika_panda/panda.xml",
   "franka_emika_panda/panda_nohand.xml",
   "franka_emika_panda/hand.xml",

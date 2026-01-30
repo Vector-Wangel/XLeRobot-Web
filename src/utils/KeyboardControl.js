@@ -422,6 +422,280 @@ class XLeRobotController {
 }
 
 // ============================================================================
+// Panda Controller (Mocap-based IK)
+// ============================================================================
+
+/**
+ * Quaternion multiplication helper
+ * @param {number[]} q1 - First quaternion [w, x, y, z]
+ * @param {number[]} q2 - Second quaternion [w, x, y, z]
+ * @returns {number[]} - Result quaternion [w, x, y, z]
+ */
+function quatMultiply(q1, q2) {
+  return [
+    q1[0]*q2[0] - q1[1]*q2[1] - q1[2]*q2[2] - q1[3]*q2[3],
+    q1[0]*q2[1] + q1[1]*q2[0] + q1[2]*q2[3] - q1[3]*q2[2],
+    q1[0]*q2[2] - q1[1]*q2[3] + q1[2]*q2[0] + q1[3]*q2[1],
+    q1[0]*q2[3] + q1[1]*q2[2] - q1[2]*q2[1] + q1[3]*q2[0]
+  ];
+}
+
+/**
+ * Create quaternion from axis-angle
+ * @param {number[]} axis - Rotation axis [x, y, z]
+ * @param {number} angle - Rotation angle in radians
+ * @returns {number[]} - Quaternion [w, x, y, z]
+ */
+function quatFromAxisAngle(axis, angle) {
+  const halfAngle = angle / 2;
+  const s = Math.sin(halfAngle);
+  return [Math.cos(halfAngle), axis[0] * s, axis[1] * s, axis[2] * s];
+}
+
+/**
+ * Normalize a quaternion
+ * @param {number[]} q - Quaternion [w, x, y, z]
+ * @returns {number[]} - Normalized quaternion
+ */
+function quatNormalize(q) {
+  const norm = Math.sqrt(q[0]*q[0] + q[1]*q[1] + q[2]*q[2] + q[3]*q[3]);
+  if (norm < 1e-10) return [1, 0, 0, 0];
+  return [q[0]/norm, q[1]/norm, q[2]/norm, q[3]/norm];
+}
+
+/**
+ * Panda robot controller using mocap body for IK
+ *
+ * Controls:
+ * - Position: W/S (X forward/back), A/D (Y left/right), Q/E (Z up/down)
+ * - Orientation: Z/C (Roll), R/F (Pitch), T/G (Yaw)
+ * - Gripper: V (Open), B (Close)
+ * - Reset: X
+ */
+class PandaController {
+  constructor() {
+    // Movement speed constants
+    this.POS_STEP = 0.002;      // Position step per frame
+    this.ROT_STEP = 0.02;       // Rotation step per frame (radians)
+
+    // Gripper settings (actuator8 has ctrlrange 0-255)
+    this.GRIPPER_OPEN = 255;
+    this.GRIPPER_CLOSED = 0;
+    this.GRIPPER_ACTUATOR_IDX = 8;
+
+    // Initial mocap position and orientation
+    this.INITIAL_POS = [0.5, 0, 0.5];
+    this.INITIAL_QUAT = [1, 0, 0, 0];  // Identity quaternion [w, x, y, z]
+
+    // Workspace limits
+    this.POS_MIN = [0.2, -0.5, 0.1];
+    this.POS_MAX = [0.8, 0.5, 0.8];
+
+    // State
+    this.state = null;
+    this.initialized = false;
+  }
+
+  /**
+   * Initialize the controller state
+   */
+  _initState() {
+    this.state = {
+      // Current mocap target position
+      pos: [...this.INITIAL_POS],
+      // Current mocap target orientation (quaternion [w, x, y, z])
+      quat: [...this.INITIAL_QUAT],
+      // Gripper state (true = open)
+      gripperOpen: false,
+    };
+  }
+
+  /**
+   * Initialize the controller with model and data
+   * @param {object} model - MuJoCo model
+   * @param {object} data - MuJoCo data
+   */
+  initialize(model, data) {
+    this._initState();
+
+    // Set initial mocap position and orientation
+    this._applyMocapState(data);
+
+    // Set gripper to closed
+    data.ctrl[this.GRIPPER_ACTUATOR_IDX] = this.GRIPPER_CLOSED;
+
+    this.initialized = true;
+  }
+
+  /**
+   * Apply current state to mocap body
+   * @param {object} data - MuJoCo data
+   */
+  _applyMocapState(data) {
+    // MuJoCo mocap arrays: mocap_pos[3*i], mocap_quat[4*i] for body i
+    // We have only one mocap body (index 0)
+    data.mocap_pos[0] = this.state.pos[0];
+    data.mocap_pos[1] = this.state.pos[1];
+    data.mocap_pos[2] = this.state.pos[2];
+
+    data.mocap_quat[0] = this.state.quat[0];
+    data.mocap_quat[1] = this.state.quat[1];
+    data.mocap_quat[2] = this.state.quat[2];
+    data.mocap_quat[3] = this.state.quat[3];
+  }
+
+  /**
+   * Clamp position to workspace limits
+   */
+  _clampPosition() {
+    for (let i = 0; i < 3; i++) {
+      this.state.pos[i] = Math.max(this.POS_MIN[i], Math.min(this.POS_MAX[i], this.state.pos[i]));
+    }
+  }
+
+  /**
+   * Reset all positions to initial state
+   * @param {object} data - MuJoCo data
+   */
+  reset(data) {
+    this._initState();
+    this._applyMocapState(data);
+    data.ctrl[this.GRIPPER_ACTUATOR_IDX] = this.GRIPPER_CLOSED;
+  }
+
+  /**
+   * Update controls based on keyboard state
+   * @param {object} keyStates - Current keyboard states
+   * @param {object} model - MuJoCo model
+   * @param {object} data - MuJoCo data
+   */
+  update(keyStates, model, data) {
+    if (!this.initialized || !this.state) {
+      this.initialize(model, data);
+    }
+
+    // ========================================
+    // Position Control
+    // ========================================
+
+    // X axis (forward/back): W/S
+    if (keyStates['KeyW']) {
+      this.state.pos[0] += this.POS_STEP;
+    }
+    if (keyStates['KeyS']) {
+      this.state.pos[0] -= this.POS_STEP;
+    }
+
+    // Y axis (left/right): A/D
+    if (keyStates['KeyA']) {
+      this.state.pos[1] += this.POS_STEP;
+    }
+    if (keyStates['KeyD']) {
+      this.state.pos[1] -= this.POS_STEP;
+    }
+
+    // Z axis (up/down): Q/E
+    if (keyStates['KeyQ']) {
+      this.state.pos[2] += this.POS_STEP;
+    }
+    if (keyStates['KeyE']) {
+      this.state.pos[2] -= this.POS_STEP;
+    }
+
+    // ========================================
+    // Orientation Control
+    // ========================================
+
+    // Roll (rotation around X): Z/C
+    if (keyStates['KeyZ']) {
+      const deltaQuat = quatFromAxisAngle([1, 0, 0], this.ROT_STEP);
+      this.state.quat = quatNormalize(quatMultiply(this.state.quat, deltaQuat));
+    }
+    if (keyStates['KeyC']) {
+      const deltaQuat = quatFromAxisAngle([1, 0, 0], -this.ROT_STEP);
+      this.state.quat = quatNormalize(quatMultiply(this.state.quat, deltaQuat));
+    }
+
+    // Pitch (rotation around Y): R/F
+    if (keyStates['KeyR']) {
+      const deltaQuat = quatFromAxisAngle([0, 1, 0], this.ROT_STEP);
+      this.state.quat = quatNormalize(quatMultiply(this.state.quat, deltaQuat));
+    }
+    if (keyStates['KeyF']) {
+      const deltaQuat = quatFromAxisAngle([0, 1, 0], -this.ROT_STEP);
+      this.state.quat = quatNormalize(quatMultiply(this.state.quat, deltaQuat));
+    }
+
+    // Yaw (rotation around Z): T/G
+    if (keyStates['KeyT']) {
+      const deltaQuat = quatFromAxisAngle([0, 0, 1], this.ROT_STEP);
+      this.state.quat = quatNormalize(quatMultiply(this.state.quat, deltaQuat));
+    }
+    if (keyStates['KeyG']) {
+      const deltaQuat = quatFromAxisAngle([0, 0, 1], -this.ROT_STEP);
+      this.state.quat = quatNormalize(quatMultiply(this.state.quat, deltaQuat));
+    }
+
+    // ========================================
+    // Gripper Control
+    // ========================================
+
+    // Open gripper: V
+    if (keyStates['KeyV']) {
+      this.state.gripperOpen = true;
+    }
+    // Close gripper: B
+    if (keyStates['KeyB']) {
+      this.state.gripperOpen = false;
+    }
+
+    // ========================================
+    // Reset: X
+    // ========================================
+    if (keyStates['KeyX']) {
+      this.reset(data);
+      return;
+    }
+
+    // ========================================
+    // Apply state
+    // ========================================
+    this._clampPosition();
+    this._applyMocapState(data);
+    data.ctrl[this.GRIPPER_ACTUATOR_IDX] = this.state.gripperOpen ? this.GRIPPER_OPEN : this.GRIPPER_CLOSED;
+  }
+
+  /**
+   * Get the list of keys this controller uses
+   * @returns {string[]}
+   */
+  getControlKeys() {
+    return [
+      // Position
+      'KeyW', 'KeyS', 'KeyA', 'KeyD', 'KeyQ', 'KeyE',
+      // Orientation
+      'KeyZ', 'KeyC', 'KeyR', 'KeyF', 'KeyT', 'KeyG',
+      // Gripper
+      'KeyV', 'KeyB',
+      // Reset
+      'KeyX'
+    ];
+  }
+
+  /**
+   * Get description for GUI display
+   * @returns {string}
+   */
+  getDescription() {
+    return [
+      'Position: W/S (X) | A/D (Y) | Q/E (Z)',
+      'Rotation: Z/C (Roll) | R/F (Pitch) | T/G (Yaw)',
+      'Gripper: V Open | B Close | X Reset'
+    ].join('\n');
+  }
+}
+
+// ============================================================================
 // Scene Configuration
 // ============================================================================
 
@@ -431,6 +705,11 @@ const SCENE_CONFIGS = {
     type: 'custom',
     controller: new XLeRobotController(),
     description: 'XLeRobot Dual-Arm Control'
+  },
+  'franka_emika_panda/scene.xml': {
+    type: 'custom',
+    controller: new PandaController(),
+    description: 'Panda Mocap IK Control'
   }
   // Add more scenes here as needed
 };
