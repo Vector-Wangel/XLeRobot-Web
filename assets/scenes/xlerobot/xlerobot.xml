@@ -69,7 +69,7 @@
     </default>
     <default class="collision">
       <geom contype="1" conaffinity="1" group="3" type="mesh"
-            condim="4"/>
+            condim="4" solref="0.002 1.0" solimp="0.95 0.99 0.001"/>
     </default>
   </default>
 
