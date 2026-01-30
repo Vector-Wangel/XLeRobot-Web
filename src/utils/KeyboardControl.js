@@ -99,7 +99,7 @@ class XLeRobotController {
 
     // Gripper positions
     this.GRIPPER_OPEN = 1.5;
-    this.GRIPPER_CLOSED = -0.2;
+    this.GRIPPER_CLOSED = -0.25;
     this.GRIPPER_COOLDOWN_FRAMES = 60;  // Frames to wait between toggles
 
     // Initial end effector position

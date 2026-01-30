@@ -173,19 +173,19 @@
                   <!-- Visual meshes -->
                   <geom type="mesh" mesh="Fixed_Jaw" material="white" class="visual"/>
                   <geom type="mesh" mesh="Fixed_Jaw_Motor" material="motor" class="visual"/>
-                  <!-- Collision meshes (using convex parts from URDF) with high friction for gripping -->
-                  <geom type="mesh" mesh="Fixed_Jaw_part1" class="collision" friction="2 0.1 0.01" condim="4"/>
-                  <geom type="mesh" mesh="Fixed_Jaw_part2" class="collision" friction="2 0.1 0.01" condim="4"/>
+                  <!-- Collision meshes with very high friction for gripping -->
+                  <geom type="mesh" mesh="Fixed_Jaw_part1" class="collision" friction="3 0.2 0.1" condim="6"/>
+                  <geom type="mesh" mesh="Fixed_Jaw_part2" class="collision" friction="3 0.2 0.1" condim="6"/>
 
                   <body name="Moving_Jaw" pos="-0.0202 -0.0244 0" euler="3.1416 0 3.33">
                     <inertial pos="-0.00157495 -0.0300244 0.0192755" mass="0.012" fullinertia="6.61427e-06 1.89032e-06 5.28738e-06 -3.19807e-07 -5.90717e-09 -1.09945e-07"/>
                     <joint name="Jaw_L" type="hinge" axis="0 0 1" range="-0.37453297762778586 1.7453291995659765" class="sts3215"/>
                     <!-- Visual mesh -->
                     <geom type="mesh" mesh="Moving_Jaw" material="white" class="visual"/>
-                    <!-- Collision meshes (using convex parts from URDF) with high friction for gripping -->
-                    <geom type="mesh" mesh="Moving_Jaw_part1" class="collision" friction="2 0.1 0.01" condim="4"/>
-                    <geom type="mesh" mesh="Moving_Jaw_part2" class="collision" friction="2 0.1 0.01" condim="4"/>
-                    <geom type="mesh" mesh="Moving_Jaw_part3" class="collision" friction="2 0.1 0.01" condim="4"/>
+                    <!-- Collision meshes with very high friction for gripping -->
+                    <geom type="mesh" mesh="Moving_Jaw_part1" class="collision" friction="3 0.2 0.1" condim="6"/>
+                    <geom type="mesh" mesh="Moving_Jaw_part2" class="collision" friction="3 0.2 0.1" condim="6"/>
+                    <geom type="mesh" mesh="Moving_Jaw_part3" class="collision" friction="3 0.2 0.1" condim="6"/>
                   </body>
 
                   <!-- Camera on first arm -->
@@ -256,19 +256,19 @@
                   <!-- Visual meshes -->
                   <geom type="mesh" mesh="Fixed_Jaw" material="white" class="visual"/>
                   <geom type="mesh" mesh="Fixed_Jaw_Motor" material="motor" class="visual"/>
-                  <!-- Collision meshes (using convex parts from URDF) with high friction for gripping -->
-                  <geom type="mesh" mesh="Fixed_Jaw_part1" class="collision" friction="2 0.1 0.01" condim="4"/>
-                  <geom type="mesh" mesh="Fixed_Jaw_part2" class="collision" friction="2 0.1 0.01" condim="4"/>
+                  <!-- Collision meshes with very high friction for gripping -->
+                  <geom type="mesh" mesh="Fixed_Jaw_part1" class="collision" friction="3 0.2 0.1" condim="6"/>
+                  <geom type="mesh" mesh="Fixed_Jaw_part2" class="collision" friction="3 0.2 0.1" condim="6"/>
 
                   <body name="Moving_Jaw_2" pos="-0.0202 -0.0244 0" euler="3.1416 0 3.33">
                     <inertial pos="-0.00157495 -0.0300244 0.0192755" mass="0.012" fullinertia="6.61427e-06 1.89032e-06 5.28738e-06 -3.19807e-07 -5.90717e-09 -1.09945e-07"/>
                     <joint name="Jaw_R" type="hinge" axis="0 0 1" range="-0.37453297762778586 1.7453291995659765" class="sts3215"/>
                     <!-- Visual mesh -->
                     <geom type="mesh" mesh="Moving_Jaw" material="white" class="visual"/>
-                    <!-- Collision meshes (using convex parts from URDF) with high friction for gripping -->
-                    <geom type="mesh" mesh="Moving_Jaw_part1" class="collision" friction="2 0.1 0.01" condim="4"/>
-                    <geom type="mesh" mesh="Moving_Jaw_part2" class="collision" friction="2 0.1 0.01" condim="4"/>
-                    <geom type="mesh" mesh="Moving_Jaw_part3" class="collision" friction="2 0.1 0.01" condim="4"/>
+                    <!-- Collision meshes with very high friction for gripping -->
+                    <geom type="mesh" mesh="Moving_Jaw_part1" class="collision" friction="3 0.2 0.1" condim="6"/>
+                    <geom type="mesh" mesh="Moving_Jaw_part2" class="collision" friction="3 0.2 0.1" condim="6"/>
+                    <geom type="mesh" mesh="Moving_Jaw_part3" class="collision" friction="3 0.2 0.1" condim="6"/>
                   </body>
 
                   <!-- Camera on second arm -->
@@ -379,7 +379,7 @@
     <position class="sts3215" name="Elbow_L" joint="Elbow_L" forcerange="-3.35 3.35" ctrlrange="-0.22 3.14"/>
     <position class="sts3215" name="Wrist_Pitch_L" joint="Wrist_Pitch_L" forcerange="-3.35 3.35" ctrlrange="-1.65806 1.65806"/>
     <position class="sts3215" name="Wrist_Roll_L" joint="Wrist_Roll_L" forcerange="-3.35 3.35" ctrlrange="-2.74385 2.84121"/>
-    <position class="sts3215" name="Jaw_L" joint="Jaw_L" forcerange="-3.35 3.35" ctrlrange="-0.37453 1.74533"/>
+    <position class="sts3215" name="Jaw_L" joint="Jaw_L" forcerange="-10 10" ctrlrange="-0.37453 1.74533"/>
 
     <!-- Second arm actuators (SO101 STS3215 parameters with SO101 joint ranges) -->
     <position class="sts3215" name="Rotation_R" joint="Rotation_R" forcerange="-3.35 3.35" ctrlrange="-2.16 2.16"/>
@@ -387,7 +387,7 @@
     <position class="sts3215" name="Elbow_R" joint="Elbow_R" forcerange="-3.35 3.35" ctrlrange="-0.22 3.14"/>
     <position class="sts3215" name="Wrist_Pitch_R" joint="Wrist_Pitch_R" forcerange="-3.35 3.35" ctrlrange="-1.65806 1.65806"/>
     <position class="sts3215" name="Wrist_Roll_R" joint="Wrist_Roll_R" forcerange="-3.35 3.35" ctrlrange="-2.74385 2.84121"/>
-    <position class="sts3215" name="Jaw_R" joint="Jaw_R" forcerange="-3.35 3.35" ctrlrange="-0.37453 1.74533"/>
+    <position class="sts3215" name="Jaw_R" joint="Jaw_R" forcerange="-10 10" ctrlrange="-0.37453 1.74533"/>
 
     <!-- Head actuators (SO101 STS3215 parameters) -->
     <position class="sts3215" name="head_pan" joint="head_pan_joint" ctrlrange="-1.57 1.57"/>
