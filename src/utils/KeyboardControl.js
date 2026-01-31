@@ -478,7 +478,7 @@ class PandaController {
   constructor() {
     // Movement speed constants
     this.POS_STEP = 0.001;
-    this.ROT_STEP = 0.02;
+    this.ROT_STEP = 0.004;
 
     // DLS IK parameters
     this.DAMPING_MIN = 0.01;     // Minimum damping (for small errors)
