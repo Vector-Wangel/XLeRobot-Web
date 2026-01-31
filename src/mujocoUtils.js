@@ -21,7 +21,7 @@ export function setupGUI(parentContext) {
   parentContext.updateGUICallbacks.length = 0;
   parentContext.updateGUICallbacks.push((model, data, params) => {
     // TODO: Use free camera parameters from MuJoCo
-    parentContext.camera.position.set(1.0, 1.7, -1.7);
+    parentContext.camera.position.set(0.5, 1.7, -3);
     parentContext.controls.target.set(0, 0.7, 0);
     parentContext.controls.update(); });
 
@@ -292,7 +292,7 @@ export function setupGUI(parentContext) {
   document.addEventListener('keydown', (event) => {
     if (event.ctrlKey && event.code === 'KeyA') {
       // TODO: Use free camera parameters from MuJoCo
-      parentContext.camera.position.set(2.0, 1.7, 1.7);
+      parentContext.camera.position.set(0.5, 1.7, -3);
       parentContext.controls.target.set(0, 0.7, 0);
       parentContext.controls.update(); 
       event.preventDefault();
