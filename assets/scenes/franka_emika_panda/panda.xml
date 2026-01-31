@@ -292,5 +292,8 @@
 
   <contact>
     <exclude body1="link0" body2="link1"/>
+    <exclude body1="hand" body2="left_finger"/>
+    <exclude body1="hand" body2="right_finger"/>
+    <exclude body1="left_finger" body2="right_finger"/>
   </contact>
 </mujoco>
