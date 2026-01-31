@@ -345,18 +345,11 @@ class GaussianSplatController {
       `;
 
       // Create the iframe content with Spark.js viewer
+      // Use esm.sh which pre-bundles dependencies and handles bare specifiers
       const iframeContent = `
 <!DOCTYPE html>
 <html>
 <head>
-  <script type="importmap">
-  {
-    "imports": {
-      "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
-      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
-    }
-  }
-  </script>
   <style>
     * { margin: 0; padding: 0; }
     body { overflow: hidden; background: transparent; }
@@ -365,8 +358,8 @@ class GaussianSplatController {
 </head>
 <body>
   <script type="module">
-    import * as THREE from 'three';
-    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import * as THREE from 'https://esm.sh/three@0.169.0';
+    import { OrbitControls } from 'https://esm.sh/three@0.169.0/examples/jsm/controls/OrbitControls.js';
     import { SplatMesh } from 'https://sparkjs.dev/releases/spark/0.1.10/spark.module.js';
 
     const scene = new THREE.Scene();
