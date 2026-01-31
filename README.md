@@ -13,9 +13,9 @@ Load and Run MuJoCo 3.3.8 Models using JavaScript and the official MuJoCo WebAss
 
 <table>
   <tr>
-    <td><img src="https://github.com/user-attachments/assets/e4dedf6d-8ec0-4a11-aaa4-5e4fd29a41a3" width="300"/></td>
-    <td><img src="https://github.com/user-attachments/assets/4d398904-d2c3-4f95-b8dc-57d225317f8a" width="300"/></td>
-    <td><img src="https://github.com/user-attachments/assets/6f1e9b1e-f7b8-45d0-b563-1cc90d290a65" width="300"/></td>
+    <td><img src="https://github.com/user-attachments/assets/e4dedf6d-8ec0-4a11-aaa4-5e4fd29a41a3" width="250"/></td>
+    <td><img src="https://github.com/user-attachments/assets/4d398904-d2c3-4f95-b8dc-57d225317f8a" width="250"/></td>
+    <td><img src="https://github.com/user-attachments/assets/6f1e9b1e-f7b8-45d0-b563-1cc90d290a65" width="250"/></td>
   </tr>
 </table>
 
@@ -62,6 +62,7 @@ mujoco.mj_applyFT(model, data, [fx, fy, fz], [tx, ty, tz], [px, py, pz], bodyId,
 data.delete();
 model.delete();
 ```
+
 
 
 
