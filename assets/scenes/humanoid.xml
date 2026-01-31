@@ -18,6 +18,7 @@
 
   <visual>
     <map force="0.1" zfar="30"/>
+    <headlight diffuse="0.2 0.2 0.2" ambient="0.5 0.5 0.5" specular="0 0 0"/>
     <rgba haze="0.15 0.25 0.35 1"/>
     <global offwidth="2560" offheight="1440" elevation="-20" azimuth="120"/>
   </visual>
@@ -129,7 +130,7 @@
     </body>
     
     
-    <light name="spotlight" mode="targetbodycom" target="torso" diffuse=".8 .8 .8" specular="0.3 0.3 0.3" pos="0 -6 4" cutoff="30"/>
+    <light name="spotlight" mode="targetbodycom" target="torso" diffuse=".3 .3 .3" specular="0 0 0" pos="0 -6 4" cutoff="30"/>
     <body name="torso" pos="0 0 1.282" euler="0 0 1.57" childclass="body">
       <light name="top" pos="1 0 2" mode="trackcom"/>
       <camera name="back" pos="-3 0 1" xyaxes="0 -1 0 1 0 2" mode="trackcom"/>
