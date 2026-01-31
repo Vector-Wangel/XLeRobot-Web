@@ -477,12 +477,25 @@ function quatNormalize(q) {
 class PandaController {
   constructor() {
     // Movement speed constants
-    this.POS_STEP = 0.003;
-    this.ROT_STEP = 0.03;
+    this.POS_STEP = 0.002;
+    this.ROT_STEP = 0.02;
 
     // DLS IK parameters
-    this.DAMPING = 0.05;
-    this.IK_STEP_SIZE = 0.5;
+    this.DAMPING_MIN = 0.01;     // Minimum damping (for small errors)
+    this.DAMPING_MAX = 0.2;      // Maximum damping (for large errors)
+    this.IK_ITERATIONS = 5;      // IK iterations per frame
+    this.IK_STEP_SIZE = 0.3;     // Step size for each iteration
+
+    // Convergence thresholds
+    this.POS_THRESHOLD = 0.001;  // 1mm position tolerance
+    this.ROT_THRESHOLD = 0.01;   // ~0.5 degree rotation tolerance
+
+    // Error weighting for 6-DOF IK
+    this.POS_WEIGHT = 1.0;       // Position error weight
+    this.ROT_WEIGHT = 0.3;       // Rotation error weight (less aggressive)
+
+    // Joint velocity limits (rad/frame)
+    this.MAX_JOINT_VEL = 0.05;
 
     // Gripper settings (actuator8 has ctrlrange 0-255)
     this.GRIPPER_OPEN = 255;
@@ -492,8 +505,12 @@ class PandaController {
     this.ARM_JOINT_INDICES = [0, 1, 2, 3, 4, 5, 6];
     this.GRIPPER_ACTUATOR_IDX = 7;
 
+    // Panda joint limits (radians) - from URDF
+    this.JOINT_LIMITS_MIN = [-2.8973, -1.7628, -2.8973, -3.0718, -2.8973, -0.0175, -2.8973];
+    this.JOINT_LIMITS_MAX = [2.8973, 1.7628, 2.8973, -0.0698, 2.8973, 3.7525, 2.8973];
+
     // Workspace limits
-    this.POS_MIN = [0.2, -0.5, 0.05];
+    this.POS_MIN = [0.2, -0.5, 0.02];
     this.POS_MAX = [0.8, 0.5, 0.8];
 
     // State
@@ -501,6 +518,9 @@ class PandaController {
     this.mujoco = null;
     this.handBodyId = -1;
     this.initialized = false;
+
+    // Previous joint positions for velocity smoothing
+    this.prevQpos = null;
   }
 
   /**
@@ -633,11 +653,26 @@ class PandaController {
   }
 
   /**
+   * Compute adaptive damping based on error magnitude (Levenberg-Marquardt style)
+   */
+  _computeAdaptiveDamping(errorNorm) {
+    // Larger errors -> more damping (more stable but slower)
+    // Smaller errors -> less damping (faster convergence)
+    const t = Math.min(1, errorNorm / 0.1);  // Normalize by 10cm
+    return this.DAMPING_MIN + t * (this.DAMPING_MAX - this.DAMPING_MIN);
+  }
+
+  /**
    * Damped Least Squares: dq = J^T * (J * J^T + λ²I)^(-1) * error
+   * With adaptive damping for better stability
    */
   _solveDLS(J, error) {
     const m = error.length;
     const n = this.ARM_JOINT_INDICES.length;
+
+    // Compute error magnitude for adaptive damping
+    const errorNorm = Math.sqrt(error.reduce((sum, e) => sum + e * e, 0));
+    const damping = this._computeAdaptiveDamping(errorNorm);
 
     // Compute J * J^T + λ²I
     const JJT = [];
@@ -649,7 +684,7 @@ class PandaController {
           sum += J[i][k] * J[j][k];
         }
         if (i === j) {
-          sum += this.DAMPING * this.DAMPING;
+          sum += damping * damping;
         }
         JJT[i][j] = sum;
       }
@@ -669,24 +704,62 @@ class PandaController {
   }
 
   /**
-   * Compute Jacobian using numerical differentiation
-   * More reliable than mj_jac which may not be available in WASM
+   * Clamp joint positions to limits
    */
-  _computeNumericalJacobian(model, data) {
+  _clampJoints(data) {
+    for (let i = 0; i < this.ARM_JOINT_INDICES.length; i++) {
+      const jointIdx = this.ARM_JOINT_INDICES[i];
+      const min = this.JOINT_LIMITS_MIN[i];
+      const max = this.JOINT_LIMITS_MAX[i];
+      data.qpos[jointIdx] = Math.max(min, Math.min(max, data.qpos[jointIdx]));
+    }
+  }
+
+  /**
+   * Clamp joint velocity to prevent jerky motion
+   */
+  _clampJointVelocity(dq) {
+    for (let i = 0; i < dq.length; i++) {
+      dq[i] = Math.max(-this.MAX_JOINT_VEL, Math.min(this.MAX_JOINT_VEL, dq[i]));
+    }
+    return dq;
+  }
+
+  /**
+   * Convert quaternion difference to axis-angle (for numerical Jacobian)
+   */
+  _quatToAxisAngle(q1, q2) {
+    // q_error = q2 * q1^(-1)
+    const q1Inv = [q1[0], -q1[1], -q1[2], -q1[3]];
+    const qErr = quatMultiply(q2, q1Inv);
+
+    // For small angles: axis * angle ≈ 2 * (x, y, z)
+    if (qErr[0] < 0) {
+      return [-2 * qErr[1], -2 * qErr[2], -2 * qErr[3]];
+    }
+    return [2 * qErr[1], 2 * qErr[2], 2 * qErr[3]];
+  }
+
+  /**
+   * Compute full 6-DOF Jacobian using numerical differentiation
+   * Returns [Jp (3x7), Jr (3x7)] stacked as 6x7
+   */
+  _computeFullJacobian(model, data) {
     const epsilon = 1e-6;
     const nj = this.ARM_JOINT_INDICES.length;
 
-    // Save current joint positions
+    // Save current state
     const savedQpos = new Float64Array(model.nq);
     savedQpos.set(data.qpos);
 
-    // Get current EE position
+    // Get current EE pose
     this.mujoco.mj_forward(model, data);
     const currentPos = this._getEEPosition(data);
+    const currentQuat = this._getEEQuaternion(data);
 
-    // Compute Jacobian columns via finite differences
+    // Jacobian: 6 rows (3 position + 3 orientation), 7 columns (joints)
     const J = [];
-    for (let row = 0; row < 3; row++) {
+    for (let row = 0; row < 6; row++) {
       J.push(new Array(nj).fill(0));
     }
 
@@ -696,11 +769,19 @@ class PandaController {
       // Perturb joint
       data.qpos[jointIdx] = savedQpos[jointIdx] + epsilon;
       this.mujoco.mj_forward(model, data);
-      const perturbedPos = this._getEEPosition(data);
 
-      // Compute partial derivative
+      const perturbedPos = this._getEEPosition(data);
+      const perturbedQuat = this._getEEQuaternion(data);
+
+      // Position Jacobian (rows 0-2)
       for (let row = 0; row < 3; row++) {
         J[row][j] = (perturbedPos[row] - currentPos[row]) / epsilon;
+      }
+
+      // Orientation Jacobian (rows 3-5)
+      const deltaRot = this._quatToAxisAngle(currentQuat, perturbedQuat);
+      for (let row = 0; row < 3; row++) {
+        J[row + 3][j] = deltaRot[row] / epsilon;
       }
 
       // Restore joint
@@ -715,20 +796,59 @@ class PandaController {
   }
 
   /**
-   * Single step IK for position only (simplified, more stable)
+   * Multi-iteration 6-DOF IK for position and orientation
    */
-  _stepIK(targetPos, _targetQuat, model, data) {
-    // Forward kinematics to update body positions
-    this.mujoco.mj_forward(model, data);
+  _solveIK(targetPos, targetQuat, model, data) {
+    const totalDq = new Array(this.ARM_JOINT_INDICES.length).fill(0);
 
-    // Compute position error only (orientation control can be added later)
-    const posError = this._posError(targetPos, data);
+    for (let iter = 0; iter < this.IK_ITERATIONS; iter++) {
+      // Forward kinematics
+      this.mujoco.mj_forward(model, data);
 
-    // Compute numerical Jacobian
-    const J = this._computeNumericalJacobian(model, data);
+      // Compute errors
+      const posError = this._posError(targetPos, data);
+      const rotError = this._rotError(targetQuat, data);
 
-    // Solve DLS for position only
-    return this._solveDLS(J, posError);
+      const posNorm = Math.sqrt(posError[0]**2 + posError[1]**2 + posError[2]**2);
+      const rotNorm = Math.sqrt(rotError[0]**2 + rotError[1]**2 + rotError[2]**2);
+
+      // Check convergence
+      if (posNorm < this.POS_THRESHOLD && rotNorm < this.ROT_THRESHOLD) {
+        break;
+      }
+
+      // Compute full 6-DOF Jacobian
+      const J = this._computeFullJacobian(model, data);
+
+      // Combined error with weighting (position more important)
+      const error = [
+        posError[0] * this.POS_WEIGHT,
+        posError[1] * this.POS_WEIGHT,
+        posError[2] * this.POS_WEIGHT,
+        rotError[0] * this.ROT_WEIGHT,
+        rotError[1] * this.ROT_WEIGHT,
+        rotError[2] * this.ROT_WEIGHT
+      ];
+
+      // Solve DLS
+      const dq = this._solveDLS(J, error);
+
+      // Clamp velocity
+      this._clampJointVelocity(dq);
+
+      // Apply joint deltas
+      for (let i = 0; i < this.ARM_JOINT_INDICES.length; i++) {
+        const jointIdx = this.ARM_JOINT_INDICES[i];
+        const delta = dq[i] * this.IK_STEP_SIZE;
+        data.qpos[jointIdx] += delta;
+        totalDq[i] += delta;
+      }
+
+      // Clamp to joint limits
+      this._clampJoints(data);
+    }
+
+    return totalDq;
   }
 
   /**
@@ -854,20 +974,28 @@ class PandaController {
     }
 
     // ========================================
-    // Apply IK
+    // Apply IK (6-DOF: position + orientation)
     // ========================================
     this._clampPosition();
 
-    // Compute IK step
-    const dq = this._stepIK(this.state.targetPos, this.state.targetQuat, model, data);
+    // Solve IK with position and orientation
+    this._solveIK(this.state.targetPos, this.state.targetQuat, model, data);
 
-    // Apply joint position deltas through position control
+    // Set control targets to solved joint positions
     for (let i = 0; i < this.ARM_JOINT_INDICES.length; i++) {
       const jointIdx = this.ARM_JOINT_INDICES[i];
-      const currentQ = data.qpos[jointIdx];
-      // Clamp delta to prevent large jumps
-      const clampedDelta = Math.max(-0.1, Math.min(0.1, dq[i] * this.IK_STEP_SIZE));
-      data.ctrl[i] = currentQ + clampedDelta;
+      data.ctrl[i] = data.qpos[jointIdx];
+    }
+
+    // ========================================
+    // Gravity Compensation
+    // ========================================
+    // Apply feedforward torque to counteract gravity
+    // qfrc_bias contains gravity + Coriolis forces
+    for (let i = 0; i < this.ARM_JOINT_INDICES.length; i++) {
+      const jointIdx = this.ARM_JOINT_INDICES[i];
+      // Add gravity compensation torque directly
+      data.qfrc_applied[jointIdx] = data.qfrc_bias[jointIdx];
     }
 
     // Gripper control
