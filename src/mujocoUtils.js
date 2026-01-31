@@ -257,7 +257,7 @@ export function setupGUI(parentContext) {
 
     // Check if current scene has keyboard control config
     if (keyboardController.hasConfig(params.scene)) {
-      keyboardController.enable(params.scene, model, data);
+      keyboardController.enable(params.scene, model, data, parentContext.mujoco);
 
       keyboardFolder = simulationFolder.addFolder("Keyboard Controls");
       // Add description labels - support multi-line descriptions

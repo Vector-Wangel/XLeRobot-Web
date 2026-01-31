@@ -158,10 +158,11 @@ class XLeRobotController {
 
   /**
    * Initialize the controller with model and data
-   * @param {object} model - MuJoCo model
+   * @param {object} _model - MuJoCo model (unused)
    * @param {object} data - MuJoCo data
+   * @param {object} _mujoco - MuJoCo WASM module (unused)
    */
-  initialize(model, data) {
+  initialize(_model, data, _mujoco) {
     this._initState();
 
     // Write initial control values to position actuators
@@ -192,10 +193,11 @@ class XLeRobotController {
    * @param {object} keyStates - Current keyboard states
    * @param {object} model - MuJoCo model
    * @param {object} data - MuJoCo data
+   * @param {object} _mujoco - MuJoCo WASM module (unused)
    */
-  update(keyStates, model, data) {
+  update(keyStates, model, data, _mujoco) {
     if (!this.initialized || !this.state) {
-      this.initialize(model, data);
+      this.initialize(model, data, _mujoco);
     }
 
     // Decrement gripper cooldowns
@@ -422,7 +424,7 @@ class XLeRobotController {
 }
 
 // ============================================================================
-// Panda Controller (Mocap-based IK)
+// Panda Controller (DLS IK with mj_jac)
 // ============================================================================
 
 /**
@@ -464,7 +466,7 @@ function quatNormalize(q) {
 }
 
 /**
- * Panda robot controller using mocap body for IK
+ * Panda robot controller using Damped Least Squares IK with mj_jac
  *
  * Controls:
  * - Position: W/S (X forward/back), A/D (Y left/right), Q/E (Z up/down)
@@ -475,90 +477,38 @@ function quatNormalize(q) {
 class PandaController {
   constructor() {
     // Movement speed constants
-    this.POS_STEP = 0.002;      // Position step per frame
-    this.ROT_STEP = 0.02;       // Rotation step per frame (radians)
+    this.POS_STEP = 0.003;
+    this.ROT_STEP = 0.03;
+
+    // DLS IK parameters
+    this.DAMPING = 0.05;
+    this.IK_STEP_SIZE = 0.5;
 
     // Gripper settings (actuator8 has ctrlrange 0-255)
     this.GRIPPER_OPEN = 255;
     this.GRIPPER_CLOSED = 0;
-    this.GRIPPER_ACTUATOR_IDX = 8;
 
-    // Initial mocap position and orientation
-    this.INITIAL_POS = [0.5, 0, 0.5];
-    this.INITIAL_QUAT = [1, 0, 0, 0];  // Identity quaternion [w, x, y, z]
+    // Panda joint indices (7 DOF arm)
+    this.ARM_JOINT_INDICES = [0, 1, 2, 3, 4, 5, 6];
+    this.GRIPPER_ACTUATOR_IDX = 7;
 
     // Workspace limits
-    this.POS_MIN = [0.2, -0.5, 0.1];
+    this.POS_MIN = [0.2, -0.5, 0.05];
     this.POS_MAX = [0.8, 0.5, 0.8];
 
     // State
     this.state = null;
+    this.mujoco = null;
+    this.handBodyId = -1;
     this.initialized = false;
-  }
 
-  /**
-   * Initialize the controller state
-   */
-  _initState() {
-    this.state = {
-      // Current mocap target position
-      pos: [...this.INITIAL_POS],
-      // Current mocap target orientation (quaternion [w, x, y, z])
-      quat: [...this.INITIAL_QUAT],
-      // Gripper state (true = open)
-      gripperOpen: false,
-    };
-  }
-
-  /**
-   * Initialize the controller with model and data
-   * @param {object} model - MuJoCo model
-   * @param {object} data - MuJoCo data
-   */
-  initialize(model, data) {
-    this._initState();
-
-    // Find hand body ID and read its actual position/orientation
-    const handBodyId = this._getBodyId(model, 'hand');
-    if (handBodyId >= 0) {
-      // Read hand's world position from xpos (3 values per body)
-      const handPos = [
-        data.xpos[handBodyId * 3],
-        data.xpos[handBodyId * 3 + 1],
-        data.xpos[handBodyId * 3 + 2]
-      ];
-      // Read hand's world orientation from xquat (4 values per body)
-      const handQuat = [
-        data.xquat[handBodyId * 4],     // w
-        data.xquat[handBodyId * 4 + 1], // x
-        data.xquat[handBodyId * 4 + 2], // y
-        data.xquat[handBodyId * 4 + 3]  // z
-      ];
-
-      // Calculate tip position: hand position + rotated offset (0, 0, 0.103)
-      const tipOffset = this._rotateVector([0, 0, 0.103], handQuat);
-      this.state.pos = [
-        handPos[0] + tipOffset[0],
-        handPos[1] + tipOffset[1],
-        handPos[2] + tipOffset[2]
-      ];
-      this.state.quat = handQuat;
-    }
-
-    // Set initial mocap position and orientation
-    this._applyMocapState(data);
-
-    // Set gripper to closed
-    data.ctrl[this.GRIPPER_ACTUATOR_IDX] = this.GRIPPER_CLOSED;
-
-    this.initialized = true;
+    // Pre-allocated arrays for Jacobian computation
+    this.jacp = null;
+    this.jacr = null;
   }
 
   /**
    * Get body ID by name
-   * @param {object} model - MuJoCo model
-   * @param {string} name - Body name
-   * @returns {number} Body ID or -1 if not found
    */
   _getBodyId(model, name) {
     for (let i = 0; i < model.nbody; i++) {
@@ -574,15 +524,10 @@ class PandaController {
 
   /**
    * Rotate a vector by a quaternion
-   * @param {number[]} v - Vector [x, y, z]
-   * @param {number[]} q - Quaternion [w, x, y, z]
-   * @returns {number[]} Rotated vector
    */
   _rotateVector(v, q) {
     const [w, qx, qy, qz] = q;
     const [vx, vy, vz] = v;
-
-    // q * v * q^-1
     const t = [
       2 * (qy * vz - qz * vy),
       2 * (qz * vx - qx * vz),
@@ -596,20 +541,194 @@ class PandaController {
   }
 
   /**
-   * Apply current state to mocap body
-   * @param {object} data - MuJoCo data
+   * Get current end-effector position (fingertip)
    */
-  _applyMocapState(data) {
-    // MuJoCo mocap arrays: mocap_pos[3*i], mocap_quat[4*i] for body i
-    // We have only one mocap body (index 0)
-    data.mocap_pos[0] = this.state.pos[0];
-    data.mocap_pos[1] = this.state.pos[1];
-    data.mocap_pos[2] = this.state.pos[2];
+  _getEEPosition(data) {
+    const idx = this.handBodyId * 3;
+    const handPos = [data.xpos[idx], data.xpos[idx + 1], data.xpos[idx + 2]];
+    const handQuat = this._getEEQuaternion(data);
+    // Offset from hand to fingertip
+    const tipOffset = this._rotateVector([0, 0, 0.103], handQuat);
+    return [
+      handPos[0] + tipOffset[0],
+      handPos[1] + tipOffset[1],
+      handPos[2] + tipOffset[2]
+    ];
+  }
 
-    data.mocap_quat[0] = this.state.quat[0];
-    data.mocap_quat[1] = this.state.quat[1];
-    data.mocap_quat[2] = this.state.quat[2];
-    data.mocap_quat[3] = this.state.quat[3];
+  /**
+   * Get current end-effector quaternion
+   */
+  _getEEQuaternion(data) {
+    const idx = this.handBodyId * 4;
+    return [
+      data.xquat[idx],
+      data.xquat[idx + 1],
+      data.xquat[idx + 2],
+      data.xquat[idx + 3]
+    ];
+  }
+
+  /**
+   * Compute position error
+   */
+  _posError(targetPos, data) {
+    const eePos = this._getEEPosition(data);
+    return [
+      targetPos[0] - eePos[0],
+      targetPos[1] - eePos[1],
+      targetPos[2] - eePos[2]
+    ];
+  }
+
+  /**
+   * Compute orientation error (angle-axis)
+   */
+  _rotError(targetQuat, data) {
+    const eeQuat = this._getEEQuaternion(data);
+    // q_error = q_target * q_current^(-1)
+    const qInv = [eeQuat[0], -eeQuat[1], -eeQuat[2], -eeQuat[3]];
+    const qErr = quatMultiply(targetQuat, qInv);
+    // Convert to scaled axis-angle
+    if (qErr[0] < 0) {
+      return [-2 * qErr[1], -2 * qErr[2], -2 * qErr[3]];
+    }
+    return [2 * qErr[1], 2 * qErr[2], 2 * qErr[3]];
+  }
+
+  /**
+   * Extract relevant columns from full Jacobian for arm joints
+   */
+  _extractJacobian(fullJac, nRows, model) {
+    const J = [];
+    for (let r = 0; r < nRows; r++) {
+      const row = [];
+      for (let c = 0; c < this.ARM_JOINT_INDICES.length; c++) {
+        const jointIdx = this.ARM_JOINT_INDICES[c];
+        row.push(fullJac[r * model.nv + jointIdx]);
+      }
+      J.push(row);
+    }
+    return J;
+  }
+
+  /**
+   * Solve linear system using Gaussian elimination
+   */
+  _solveLinear(A, b) {
+    const n = b.length;
+    const aug = A.map((row, i) => [...row, b[i]]);
+
+    // Forward elimination with partial pivoting
+    for (let i = 0; i < n; i++) {
+      let maxRow = i;
+      for (let k = i + 1; k < n; k++) {
+        if (Math.abs(aug[k][i]) > Math.abs(aug[maxRow][i])) {
+          maxRow = k;
+        }
+      }
+      [aug[i], aug[maxRow]] = [aug[maxRow], aug[i]];
+
+      if (Math.abs(aug[i][i]) < 1e-10) continue;
+
+      for (let k = i + 1; k < n; k++) {
+        const factor = aug[k][i] / aug[i][i];
+        for (let j = i; j <= n; j++) {
+          aug[k][j] -= factor * aug[i][j];
+        }
+      }
+    }
+
+    // Back substitution
+    const x = new Array(n).fill(0);
+    for (let i = n - 1; i >= 0; i--) {
+      if (Math.abs(aug[i][i]) < 1e-10) continue;
+      x[i] = aug[i][n];
+      for (let j = i + 1; j < n; j++) {
+        x[i] -= aug[i][j] * x[j];
+      }
+      x[i] /= aug[i][i];
+    }
+    return x;
+  }
+
+  /**
+   * Damped Least Squares: dq = J^T * (J * J^T + λ²I)^(-1) * error
+   */
+  _solveDLS(J, error) {
+    const m = error.length;
+    const n = this.ARM_JOINT_INDICES.length;
+
+    // Compute J * J^T + λ²I
+    const JJT = [];
+    for (let i = 0; i < m; i++) {
+      JJT[i] = [];
+      for (let j = 0; j < m; j++) {
+        let sum = 0;
+        for (let k = 0; k < n; k++) {
+          sum += J[i][k] * J[j][k];
+        }
+        if (i === j) {
+          sum += this.DAMPING * this.DAMPING;
+        }
+        JJT[i][j] = sum;
+      }
+    }
+
+    // Solve (J*J^T + λ²I) * y = error
+    const y = this._solveLinear(JJT, error);
+
+    // Compute dq = J^T * y
+    const dq = new Array(n).fill(0);
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < m; j++) {
+        dq[i] += J[j][i] * y[j];
+      }
+    }
+    return dq;
+  }
+
+  /**
+   * Single step IK for position and orientation
+   */
+  _stepIK(targetPos, targetQuat, model, data) {
+    // Forward kinematics to update body positions
+    this.mujoco.mj_forward(model, data);
+
+    // Compute errors
+    const posError = this._posError(targetPos, data);
+    const rotError = this._rotError(targetQuat, data);
+
+    // Get hand body position for Jacobian computation
+    const idx = this.handBodyId * 3;
+    const point = new Float64Array([data.xpos[idx], data.xpos[idx + 1], data.xpos[idx + 2]]);
+
+    // Compute Jacobians using mj_jac
+    this.mujoco.mj_jac(model, data, this.jacp, this.jacr, point, this.handBodyId);
+
+    // Extract relevant columns
+    const Jp = this._extractJacobian(this.jacp, 3, model);
+    const Jr = this._extractJacobian(this.jacr, 3, model);
+    const J = [...Jp, ...Jr];
+
+    // Combined error (with position weighted more)
+    const error = [...posError.map(e => e * 1.0), ...rotError.map(e => e * 0.3)];
+
+    // Solve DLS
+    return this._solveDLS(J, error);
+  }
+
+  /**
+   * Initialize the controller state
+   */
+  _initState(data) {
+    const eePos = this._getEEPosition(data);
+    const eeQuat = this._getEEQuaternion(data);
+    this.state = {
+      targetPos: [...eePos],
+      targetQuat: [...eeQuat],
+      gripperOpen: false,
+    };
   }
 
   /**
@@ -617,142 +736,148 @@ class PandaController {
    */
   _clampPosition() {
     for (let i = 0; i < 3; i++) {
-      this.state.pos[i] = Math.max(this.POS_MIN[i], Math.min(this.POS_MAX[i], this.state.pos[i]));
+      this.state.targetPos[i] = Math.max(this.POS_MIN[i], Math.min(this.POS_MAX[i], this.state.targetPos[i]));
     }
   }
 
   /**
-   * Reset all positions to initial state
-   * @param {object} data - MuJoCo data
+   * Initialize the controller with model and data
    */
-  reset(data) {
-    this._initState();
-    this._applyMocapState(data);
-    data.ctrl[this.GRIPPER_ACTUATOR_IDX] = this.GRIPPER_CLOSED;
+  initialize(model, data, mujoco) {
+    this.mujoco = mujoco;
+    this.handBodyId = this._getBodyId(model, 'hand');
+
+    if (this.handBodyId < 0) {
+      console.error('PandaController: hand body not found');
+      return;
+    }
+
+    // Allocate Jacobian arrays
+    this.jacp = new Float64Array(3 * model.nv);
+    this.jacr = new Float64Array(3 * model.nv);
+
+    // Do forward kinematics to get initial EE position
+    mujoco.mj_forward(model, data);
+
+    this._initState(data);
+    this.initialized = true;
+
+    console.log('PandaController initialized with DLS IK');
+    console.log('Initial EE position:', this.state.targetPos);
+  }
+
+  /**
+   * Reset to initial state
+   */
+  reset(model, data) {
+    // Reset to keyframe if available
+    if (model.nkey > 0) {
+      data.qpos.set(model.key_qpos.slice(0, model.nq));
+      this.mujoco.mj_forward(model, data);
+    }
+    this._initState(data);
   }
 
   /**
    * Update controls based on keyboard state
-   * @param {object} keyStates - Current keyboard states
-   * @param {object} model - MuJoCo model
-   * @param {object} data - MuJoCo data
    */
-  update(keyStates, model, data) {
+  update(keyStates, model, data, mujoco) {
     if (!this.initialized || !this.state) {
-      this.initialize(model, data);
+      this.initialize(model, data, mujoco);
+      return;
+    }
+
+    // Store mujoco reference in case it wasn't set during init
+    if (!this.mujoco && mujoco) {
+      this.mujoco = mujoco;
     }
 
     // ========================================
     // Position Control
     // ========================================
-
-    // X axis (forward/back): W/S
-    if (keyStates['KeyW']) {
-      this.state.pos[0] += this.POS_STEP;
-    }
-    if (keyStates['KeyS']) {
-      this.state.pos[0] -= this.POS_STEP;
-    }
-
-    // Y axis (left/right): A/D
-    if (keyStates['KeyA']) {
-      this.state.pos[1] += this.POS_STEP;
-    }
-    if (keyStates['KeyD']) {
-      this.state.pos[1] -= this.POS_STEP;
-    }
-
-    // Z axis (up/down): Q/E
-    if (keyStates['KeyQ']) {
-      this.state.pos[2] += this.POS_STEP;
-    }
-    if (keyStates['KeyE']) {
-      this.state.pos[2] -= this.POS_STEP;
-    }
+    if (keyStates['KeyW']) this.state.targetPos[0] += this.POS_STEP;
+    if (keyStates['KeyS']) this.state.targetPos[0] -= this.POS_STEP;
+    if (keyStates['KeyA']) this.state.targetPos[1] += this.POS_STEP;
+    if (keyStates['KeyD']) this.state.targetPos[1] -= this.POS_STEP;
+    if (keyStates['KeyQ']) this.state.targetPos[2] += this.POS_STEP;
+    if (keyStates['KeyE']) this.state.targetPos[2] -= this.POS_STEP;
 
     // ========================================
     // Orientation Control
     // ========================================
-
-    // Roll (rotation around X): Z/C
     if (keyStates['KeyZ']) {
-      const deltaQuat = quatFromAxisAngle([1, 0, 0], this.ROT_STEP);
-      this.state.quat = quatNormalize(quatMultiply(this.state.quat, deltaQuat));
+      const dq = quatFromAxisAngle([1, 0, 0], this.ROT_STEP);
+      this.state.targetQuat = quatNormalize(quatMultiply(this.state.targetQuat, dq));
     }
     if (keyStates['KeyC']) {
-      const deltaQuat = quatFromAxisAngle([1, 0, 0], -this.ROT_STEP);
-      this.state.quat = quatNormalize(quatMultiply(this.state.quat, deltaQuat));
+      const dq = quatFromAxisAngle([1, 0, 0], -this.ROT_STEP);
+      this.state.targetQuat = quatNormalize(quatMultiply(this.state.targetQuat, dq));
     }
-
-    // Pitch (rotation around Y): R/F
     if (keyStates['KeyR']) {
-      const deltaQuat = quatFromAxisAngle([0, 1, 0], this.ROT_STEP);
-      this.state.quat = quatNormalize(quatMultiply(this.state.quat, deltaQuat));
+      const dq = quatFromAxisAngle([0, 1, 0], this.ROT_STEP);
+      this.state.targetQuat = quatNormalize(quatMultiply(this.state.targetQuat, dq));
     }
     if (keyStates['KeyF']) {
-      const deltaQuat = quatFromAxisAngle([0, 1, 0], -this.ROT_STEP);
-      this.state.quat = quatNormalize(quatMultiply(this.state.quat, deltaQuat));
+      const dq = quatFromAxisAngle([0, 1, 0], -this.ROT_STEP);
+      this.state.targetQuat = quatNormalize(quatMultiply(this.state.targetQuat, dq));
     }
-
-    // Yaw (rotation around Z): T/G
     if (keyStates['KeyT']) {
-      const deltaQuat = quatFromAxisAngle([0, 0, 1], this.ROT_STEP);
-      this.state.quat = quatNormalize(quatMultiply(this.state.quat, deltaQuat));
+      const dq = quatFromAxisAngle([0, 0, 1], this.ROT_STEP);
+      this.state.targetQuat = quatNormalize(quatMultiply(this.state.targetQuat, dq));
     }
     if (keyStates['KeyG']) {
-      const deltaQuat = quatFromAxisAngle([0, 0, 1], -this.ROT_STEP);
-      this.state.quat = quatNormalize(quatMultiply(this.state.quat, deltaQuat));
+      const dq = quatFromAxisAngle([0, 0, 1], -this.ROT_STEP);
+      this.state.targetQuat = quatNormalize(quatMultiply(this.state.targetQuat, dq));
     }
 
     // ========================================
     // Gripper Control
     // ========================================
-
-    // Open gripper: V
-    if (keyStates['KeyV']) {
-      this.state.gripperOpen = true;
-    }
-    // Close gripper: B
-    if (keyStates['KeyB']) {
-      this.state.gripperOpen = false;
-    }
+    if (keyStates['KeyV']) this.state.gripperOpen = true;
+    if (keyStates['KeyB']) this.state.gripperOpen = false;
 
     // ========================================
-    // Reset: X
+    // Reset
     // ========================================
     if (keyStates['KeyX']) {
-      this.reset(data);
+      this.reset(model, data);
       return;
     }
 
     // ========================================
-    // Apply state
+    // Apply IK
     // ========================================
     this._clampPosition();
-    this._applyMocapState(data);
+
+    // Compute IK step
+    const dq = this._stepIK(this.state.targetPos, this.state.targetQuat, model, data);
+
+    // Apply joint position deltas through position control
+    for (let i = 0; i < this.ARM_JOINT_INDICES.length; i++) {
+      const jointIdx = this.ARM_JOINT_INDICES[i];
+      const currentQ = data.qpos[jointIdx];
+      // Clamp delta to prevent large jumps
+      const clampedDelta = Math.max(-0.1, Math.min(0.1, dq[i] * this.IK_STEP_SIZE));
+      data.ctrl[i] = currentQ + clampedDelta;
+    }
+
+    // Gripper control
     data.ctrl[this.GRIPPER_ACTUATOR_IDX] = this.state.gripperOpen ? this.GRIPPER_OPEN : this.GRIPPER_CLOSED;
   }
 
   /**
    * Get the list of keys this controller uses
-   * @returns {string[]}
    */
   getControlKeys() {
     return [
-      // Position
       'KeyW', 'KeyS', 'KeyA', 'KeyD', 'KeyQ', 'KeyE',
-      // Orientation
       'KeyZ', 'KeyC', 'KeyR', 'KeyF', 'KeyT', 'KeyG',
-      // Gripper
-      'KeyV', 'KeyB',
-      // Reset
-      'KeyX'
+      'KeyV', 'KeyB', 'KeyX'
     ];
   }
 
   /**
    * Get description for GUI display
-   * @returns {string}
    */
   getDescription() {
     return [
@@ -777,7 +902,7 @@ const SCENE_CONFIGS = {
   'franka_emika_panda/scene.xml': {
     type: 'custom',
     controller: new PandaController(),
-    description: 'Panda Mocap IK Control'
+    description: 'Panda DLS IK Control'
   }
   // Add more scenes here as needed
 };
@@ -824,9 +949,10 @@ export class KeyboardController {
    * @param {string} sceneName - The scene filename
    * @param {object} model - MuJoCo model
    * @param {object} data - MuJoCo data
+   * @param {object} mujoco - MuJoCo WASM module (optional, needed for IK)
    * @returns {boolean} - Whether enabling was successful
    */
-  enable(sceneName, model, data) {
+  enable(sceneName, model, data, mujoco = null) {
     // Disable any existing control first
     this.disable();
 
@@ -838,11 +964,12 @@ export class KeyboardController {
     this.config = config;
     this.model = model;
     this.data = data;
+    this.mujoco = mujoco;
 
     // Handle custom controller
     if (config.type === 'custom' && config.controller) {
       this.customController = config.controller;
-      this.customController.initialize(model, data);
+      this.customController.initialize(model, data, mujoco);
 
       // Initialize key states for custom controller
       this.keyStates = {};
@@ -895,6 +1022,7 @@ export class KeyboardController {
     this.config = null;
     this.model = null;
     this.data = null;
+    this.mujoco = null;
     this.keyStates = {};
     this.actuatorIndices = {};
     this.customController = null;
@@ -909,7 +1037,7 @@ export class KeyboardController {
 
     // Use custom controller if available
     if (this.customController) {
-      this.customController.update(this.keyStates, this.model, this.data);
+      this.customController.update(this.keyStates, this.model, this.data, this.mujoco);
       return;
     }
 
