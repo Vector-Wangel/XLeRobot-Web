@@ -7,9 +7,6 @@ import { setupGUI, downloadExampleScenesFolder, loadSceneFromURL, drawTendonsAnd
 import { keyboardController } from './utils/KeyboardControl.js';
 import   load_mujoco        from '../node_modules/mujoco-js/dist/mujoco_wasm.js';
 
-// 3DGS Spark library for Gaussian Splatting
-import { SplatMesh } from 'https://sparkjs.dev/releases/spark/0.1.10/spark.module.js';
-
 // ===== 新增：后处理相关 =====
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -326,15 +323,15 @@ export class MuJoCoDemo {
     // Draw Tendons and Flex verts
     drawTendonsAndFlex(this.mujocoRoot, this.model, this.data);
 
-    // Render scene
+    // Sync camera to 3DGS iframe if enabled
     if (this.gsController && this.gsController.enabled) {
-      // 3DGS enabled: bypass post-processing for transparency
-      // SplatMesh is already in the scene, no camera sync needed
+      this.gsController.syncCamera(this.camera, this.controls);
+      // 绕过后处理，直接渲染以保持透明度
       this.renderer.setClearColor(0x000000, 0);
       this.renderer.clear();
       this.renderer.render(this.scene, this.camera);
     } else {
-      // Normal rendering with post-processing
+      // Render with post-processing
       this.composer.render();
     }
   }
@@ -344,14 +341,14 @@ let demo = new MuJoCoDemo();
 await demo.init();
 
 // ============================================================================
-// Gaussian Splatting Environment Controller (same-scene rendering with SplatMesh)
+// Gaussian Splatting Environment Controller (iframe isolation)
 // ============================================================================
 
 class GaussianSplatController {
   constructor(container, scene) {
     this.container = container;
     this.scene = scene;
-    this.splatMesh = null;
+    this.iframe = null;
     this.enabled = false;
     this.loading = false;
     this.savedBackground = null;
@@ -362,38 +359,52 @@ class GaussianSplatController {
     if (this.enabled || this.loading) return;
     this.loading = true;
 
-    // Convert relative URL to absolute URL
+    // Convert relative URL to absolute URL for use in iframe
     const absoluteSpzUrl = new URL(spzUrl, window.location.href).href;
 
     try {
-      console.log('Loading 3DGS into scene...');
+      console.log('Creating 3DGS iframe viewer...');
       console.log('Loading splat from:', absoluteSpzUrl);
 
-      // Create SplatMesh and add directly to the scene
-      this.splatMesh = new SplatMesh({ url: absoluteSpzUrl });
+      // Create iframe for isolated 3DGS rendering
+      // GS behind the MuJoCo canvas
+      this.iframe = document.createElement('iframe');
+      this.iframe.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        border: none;
+        pointer-events: none;
+        z-index: 0;
+      `;
 
-      // Render GS as background (behind MuJoCo objects)
-      this.splatMesh.renderOrder = -1;
+      // Use separate HTML file to avoid blob URL import issues
+      // Pass splat URL as query parameter
+      const viewerUrl = new URL('./gs-viewer.html', window.location.href);
+      viewerUrl.searchParams.set('splat', absoluteSpzUrl);
 
-      // Add to scene
-      this.scene.add(this.splatMesh);
+      // Insert iframe at start of body (behind everything)
+      document.body.insertBefore(this.iframe, document.body.firstChild);
 
-      // Wait for splat to load
+      // Set iframe source to the viewer HTML file
+      this.iframe.src = viewerUrl.href;
+
+      // Wait for iframe to be ready
       await new Promise((resolve) => {
-        // SplatMesh loads asynchronously, give it time to initialize
-        const checkLoaded = () => {
-          if (this.splatMesh.geometry && this.splatMesh.geometry.attributes.position) {
+        const handler = (e) => {
+          if (e.data.type === 'gsReady') {
+            window.removeEventListener('message', handler);
             resolve();
-          } else {
-            setTimeout(checkLoaded, 100);
           }
         };
-        checkLoaded();
+        window.addEventListener('message', handler);
         // Timeout fallback
         setTimeout(resolve, 5000);
       });
 
-      // Save and clear scene background to show GS
+      // Save and clear scene background to show iframe through
       this.savedBackground = this.scene.background;
       this.savedFog = this.scene.fog;
       this.scene.background = null;
@@ -402,24 +413,24 @@ class GaussianSplatController {
       // Hide floor/ground meshes to show GS through
       this.hiddenMeshes = [];
       this.scene.traverse((obj) => {
-        if (obj.isMesh && obj !== this.splatMesh && obj.name &&
-            (obj.name.toLowerCase().includes('floor') ||
-             obj.name.toLowerCase().includes('ground') ||
-             obj.name.toLowerCase().includes('plane'))) {
+        if (obj.isMesh && obj.name && (obj.name.toLowerCase().includes('floor') || obj.name.toLowerCase().includes('ground') || obj.name.toLowerCase().includes('plane'))) {
           obj.visible = false;
           this.hiddenMeshes.push(obj);
           console.log('Hidden mesh for GS:', obj.name);
         }
       });
 
+      // Ensure container and canvas are on top of iframe
+
+      const canvas = document.getElementById('mujoco-canvas');
+      if (canvas) {
+        canvas.style.zIndex = '10';
+      }
+
       this.enabled = true;
-      console.log('3D Gaussian Splatting environment enabled (same-scene rendering)');
+      console.log('3D Gaussian Splatting environment enabled');
     } catch (err) {
       console.error('Failed to load 3DGS:', err);
-      if (this.splatMesh) {
-        this.scene.remove(this.splatMesh);
-        this.splatMesh = null;
-      }
       this.loading = false;
       throw err;
     }
@@ -427,16 +438,30 @@ class GaussianSplatController {
     this.loading = false;
   }
 
+  /**
+   * Sync camera from main scene to iframe
+   */
+  syncCamera(camera, controls) {
+    if (!this.enabled || !this.iframe || !this.iframe.contentWindow) return;
+
+    this.iframe.contentWindow.postMessage({
+      type: 'camera',
+      position: camera.position.toArray(),
+      quaternion: camera.quaternion.toArray(),
+      target: controls.target.toArray()
+    }, '*');
+  }
+
   disable() {
     if (!this.enabled) return;
 
-    // Remove SplatMesh from scene
-    if (this.splatMesh) {
-      this.scene.remove(this.splatMesh);
-      if (this.splatMesh.dispose) {
-        this.splatMesh.dispose();
+    if (this.iframe) {
+      // Revoke blob URL
+      if (this.iframe.src.startsWith('blob:')) {
+        URL.revokeObjectURL(this.iframe.src);
       }
-      this.splatMesh = null;
+      this.iframe.remove();
+      this.iframe = null;
     }
 
     // Restore scene background
@@ -455,6 +480,12 @@ class GaussianSplatController {
         mesh.visible = true;
       });
       this.hiddenMeshes = null;
+    }
+
+    // Restore canvas z-index
+    const canvas = document.getElementById('mujoco-canvas');
+    if (canvas) {
+      canvas.style.zIndex = '1';
     }
 
     this.enabled = false;
