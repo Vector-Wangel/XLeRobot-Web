@@ -328,8 +328,12 @@ class GaussianSplatController {
     if (this.enabled || this.loading) return;
     this.loading = true;
 
+    // Convert relative URL to absolute URL for use in iframe
+    const absoluteSpzUrl = new URL(spzUrl, window.location.href).href;
+
     try {
       console.log('Creating 3DGS iframe viewer...');
+      console.log('Loading splat from:', absoluteSpzUrl);
 
       // Create iframe for isolated 3DGS rendering
       this.iframe = document.createElement('iframe');
@@ -346,6 +350,7 @@ class GaussianSplatController {
 
       // Create the iframe content with Spark.js viewer
       // Use es-module-shims to enable importmap in blob URL context
+      // Use Three.js 0.178.0 as recommended by Spark.js docs
       const iframeContent = `
 <!DOCTYPE html>
 <html>
@@ -359,8 +364,8 @@ class GaussianSplatController {
   <script type="importmap">
   {
     "imports": {
-      "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
-      "three/": "https://cdn.jsdelivr.net/npm/three@0.169.0/"
+      "three": "https://cdnjs.cloudflare.com/ajax/libs/three.js/0.178.0/three.module.js",
+      "three/": "https://cdn.jsdelivr.net/npm/three@0.178.0/"
     }
   }
   </script>
@@ -382,7 +387,7 @@ class GaussianSplatController {
     let target = new THREE.Vector3(0, 0.7, 0);
 
     // Load splat
-    const splat = new SplatMesh({ url: '${spzUrl}' });
+    const splat = new SplatMesh({ url: '${absoluteSpzUrl}' });
     scene.add(splat);
 
     // Sync camera with parent
