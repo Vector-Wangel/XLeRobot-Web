@@ -296,30 +296,10 @@ export class MuJoCoDemo {
     drawTendonsAndFlex(this.mujocoRoot, this.model, this.data);
 
     // Render!
-    // Check if 3DGS is enabled
+    // When 3DGS is enabled, bypass post-processing (Spark uses its own shaders)
     if (this.gsController && this.gsController.enabled) {
-      // When 3DGS is enabled, we need to bypass post-processing
-      // because Spark.js uses its own Three.js instance with custom shaders
-      // that conflict with the post-processing pipeline
-
-      // Clear and render 3DGS first
-      this.renderer.clear();
-      this.gsController.render();
-
-      // Save and modify scene background
-      const savedBackground = this.scene.background;
-      const savedFog = this.scene.fog;
-      this.scene.background = null;
-      this.scene.fog = null;
-
-      // Render main scene on top (without clearing)
-      this.renderer.autoClear = false;
+      // Direct rendering - SparkRenderer handles 3DGS internally
       this.renderer.render(this.scene, this.camera);
-      this.renderer.autoClear = true;
-
-      // Restore scene properties
-      this.scene.background = savedBackground;
-      this.scene.fog = savedFog;
     } else {
       // Normal rendering with post-processing
       this.composer.render();
@@ -357,8 +337,7 @@ class GaussianSplatController {
         console.log('Spark.js module loaded');
       }
 
-      // Use SplatLoader for proper async loading with progress
-      const { SplatLoader, SplatMesh } = this.SparkModule;
+      const { SplatLoader, SplatMesh, SparkRenderer } = this.SparkModule;
 
       console.log('Loading SPZ file:', spzUrl);
 
@@ -376,8 +355,9 @@ class GaussianSplatController {
 
       console.log('SPZ file loaded, creating SplatMesh...');
 
-      // Create a separate scene for 3DGS to avoid shader conflicts
-      this.splatScene = new THREE.Scene();
+      // Create SparkRenderer - this handles the custom shader chunks
+      // Pass in the WebGLRenderer so Spark can manage rendering
+      this.sparkRenderer = new SparkRenderer({ renderer: this.renderer });
 
       // Create SplatMesh with loaded data
       this.splatMesh = new SplatMesh({ packedSplats });
@@ -387,7 +367,12 @@ class GaussianSplatController {
       // this.splatMesh.rotation.set(0, Math.PI, 0);
       // this.splatMesh.scale.setScalar(1.0);
 
-      this.splatScene.add(this.splatMesh);
+      // Add SparkRenderer to scene (it manages splat rendering internally)
+      this.scene.add(this.sparkRenderer);
+
+      // Add SplatMesh - it will be rendered by SparkRenderer
+      this.scene.add(this.splatMesh);
+
       this.enabled = true;
       console.log('3D Gaussian Splatting environment enabled');
     } catch (err) {
@@ -400,31 +385,34 @@ class GaussianSplatController {
   }
 
   /**
-   * Render the 3DGS scene (assumes clear was already called)
+   * Render method (not needed when using SparkRenderer in main scene)
    */
   render() {
-    if (!this.enabled || !this.splatMesh || !this.splatScene) return;
-
-    // Render 3DGS scene (don't clear, caller handles that)
-    this.renderer.render(this.splatScene, this.camera);
+    // SparkRenderer handles rendering automatically when added to scene
   }
 
   disable() {
-    if (!this.enabled || !this.splatMesh) return;
+    if (!this.enabled) return;
 
-    if (this.splatScene) {
-      this.splatScene.remove(this.splatMesh);
+    // Remove SplatMesh from scene
+    if (this.splatMesh) {
+      this.scene.remove(this.splatMesh);
+      if (this.splatMesh.dispose) {
+        this.splatMesh.dispose();
+      }
+      this.splatMesh = null;
     }
-    if (this.splatMesh.dispose) {
-      this.splatMesh.dispose();
+
+    // Remove SparkRenderer from scene
+    if (this.sparkRenderer) {
+      this.scene.remove(this.sparkRenderer);
+      if (this.sparkRenderer.dispose) {
+        this.sparkRenderer.dispose();
+      }
+      this.sparkRenderer = null;
     }
-    this.splatMesh = null;
-    this.splatScene = null;
+
     this.enabled = false;
-
-    // Restore autoClear
-    this.renderer.autoClear = true;
-
     console.log('3D Gaussian Splatting environment disabled');
   }
 
