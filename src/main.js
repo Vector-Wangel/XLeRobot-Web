@@ -88,6 +88,13 @@ export class MuJoCoDemo {
 
     this.renderer.setAnimationLoop( this.render.bind(this) );
 
+    // Position canvas absolutely so it can layer above GS iframe
+    this.renderer.domElement.style.cssText = `
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 1;
+    `;
     this.container.appendChild( this.renderer.domElement );
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
@@ -348,86 +355,16 @@ class GaussianSplatController {
         z-index: 0;
       `;
 
-      // Create the iframe content with Spark.js viewer
-      // Use es-module-shims to enable importmap in blob URL context
-      // Use Three.js 0.178.0 as recommended by Spark.js docs
-      const iframeContent = `
-<!DOCTYPE html>
-<html>
-<head>
-  <style>
-    * { margin: 0; padding: 0; }
-    body { overflow: hidden; background: transparent; }
-    canvas { display: block; }
-  </style>
-  <script async src="https://ga.jspm.io/npm:es-module-shims@1.8.0/dist/es-module-shims.js"></script>
-  <script type="importmap">
-  {
-    "imports": {
-      "three": "https://cdnjs.cloudflare.com/ajax/libs/three.js/0.178.0/three.module.js",
-      "three/": "https://cdn.jsdelivr.net/npm/three@0.178.0/"
-    }
-  }
-  </script>
-</head>
-<body>
-  <script type="module">
-    import * as THREE from 'three';
-    import { SplatMesh } from 'https://sparkjs.dev/releases/spark/0.1.10/spark.module.js';
-
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.001, 100);
-    camera.position.set(2.0, 1.7, 1.7);
-
-    const renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setClearColor(0x000000, 0);
-    document.body.appendChild(renderer.domElement);
-
-    let target = new THREE.Vector3(0, 0.7, 0);
-
-    // Wait for splat URL from parent
-    let splat = null;
-
-    // Sync camera and receive config from parent
-    window.addEventListener('message', (e) => {
-      if (e.data.type === 'camera') {
-        camera.position.fromArray(e.data.position);
-        camera.quaternion.fromArray(e.data.quaternion);
-        target.fromArray(e.data.target);
-        camera.updateProjectionMatrix();
-      } else if (e.data.type === 'loadSplat' && !splat) {
-        console.log('Loading splat from:', e.data.url);
-        splat = new SplatMesh({ url: e.data.url });
-        scene.add(splat);
-      }
-    });
-
-    // Animation loop
-    function animate() {
-      requestAnimationFrame(animate);
-      renderer.render(scene, camera);
-    }
-    animate();
-
-    window.addEventListener('resize', () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    });
-
-    // Signal ready
-    window.parent.postMessage({ type: 'gsReady' }, '*');
-  </script>
-</body>
-</html>`;
+      // Use separate HTML file to avoid blob URL import issues
+      // Pass splat URL as query parameter
+      const viewerUrl = new URL('./gs-viewer.html', window.location.href);
+      viewerUrl.searchParams.set('splat', absoluteSpzUrl);
 
       // Insert iframe before the main canvas
       this.container.insertBefore(this.iframe, this.container.firstChild);
 
-      // Write content to iframe
-      const blob = new Blob([iframeContent], { type: 'text/html' });
-      this.iframe.src = URL.createObjectURL(blob);
+      // Set iframe source to the viewer HTML file
+      this.iframe.src = viewerUrl.href;
 
       // Wait for iframe to be ready
       await new Promise((resolve) => {
@@ -439,15 +376,8 @@ class GaussianSplatController {
         };
         window.addEventListener('message', handler);
         // Timeout fallback
-        setTimeout(resolve, 3000);
+        setTimeout(resolve, 5000);
       });
-
-      // Send the splat URL to the iframe
-      console.log('Sending splat URL to iframe:', absoluteSpzUrl);
-      this.iframe.contentWindow.postMessage({
-        type: 'loadSplat',
-        url: absoluteSpzUrl
-      }, '*');
 
       // Save and clear scene background to show iframe through
       this.savedBackground = this.scene.background;

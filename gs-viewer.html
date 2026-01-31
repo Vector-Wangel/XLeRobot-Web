@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    * { margin: 0; padding: 0; }
+    body { overflow: hidden; background: transparent; }
+    canvas { display: block; }
+  </style>
+  <script async src="https://ga.jspm.io/npm:es-module-shims@1.8.0/dist/es-module-shims.js"></script>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdnjs.cloudflare.com/ajax/libs/three.js/0.178.0/three.module.js",
+      "three/": "https://cdn.jsdelivr.net/npm/three@0.178.0/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <script type="module">
+    import * as THREE from 'three';
+    import { SplatMesh } from 'https://sparkjs.dev/releases/spark/0.1.10/spark.module.js';
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.001, 100);
+    camera.position.set(2.0, 1.7, 1.7);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setClearColor(0x000000, 0);
+    document.body.appendChild(renderer.domElement);
+
+    let target = new THREE.Vector3(0, 0.7, 0);
+    let splat = null;
+
+    // Get splat URL from query parameter or use default
+    const params = new URLSearchParams(window.location.search);
+    const splatUrl = params.get('splat') || './assets/scene.spz';
+
+    console.log('GS Viewer: Loading splat from:', splatUrl);
+    splat = new SplatMesh({ url: splatUrl });
+    scene.add(splat);
+
+    // Sync camera with parent
+    window.addEventListener('message', (e) => {
+      if (e.data.type === 'camera') {
+        camera.position.fromArray(e.data.position);
+        camera.quaternion.fromArray(e.data.quaternion);
+        target.fromArray(e.data.target);
+        camera.updateProjectionMatrix();
+      }
+    });
+
+    // Animation loop
+    function animate() {
+      requestAnimationFrame(animate);
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // Signal ready to parent
+    window.parent.postMessage({ type: 'gsReady' }, '*');
+    console.log('GS Viewer: Ready');
+  </script>
+</body>
+</html>
