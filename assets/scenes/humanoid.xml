@@ -103,11 +103,11 @@
 
   <worldbody>
     <geom name="floor" size="0 0 .05" type="plane" material="grid" condim="3" group="3"/>
-    <body name="table1" pos="1.35 0.0 0.41">
-      <geom type="box" size="0.35 0.9 0.41" rgba="0.6 0.4 0.2 0.4" mass="0.1"
+    <body name="table1" pos="1.35 0.04 0.41">
+      <geom type="box" size="0.35 0.88 0.41" rgba="0.6 0.4 0.2 0.4" mass="0.1"
             contype="1" conaffinity="1" friction="1.0 0.05 0.01" condim="4"/>
     </body>
-    <body name="wall1" pos="1.75 0.1 1.2">
+    <body name="wall1" pos="1.8 0.1 1.2">
       <geom type="box" size="0.1 1 1.2" rgba="0.6 0.4 0.2 0.4" mass="0.1"
             contype="1" conaffinity="1" friction="1.0 0.05 0.01" condim="4"/>
     </body>
