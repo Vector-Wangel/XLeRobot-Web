@@ -367,7 +367,7 @@ class GaussianSplatController {
       console.log('Loading splat from:', absoluteSpzUrl);
 
       // Create iframe for isolated 3DGS rendering
-      // GS goes behind, MuJoCo canvas must be transparent
+      // GS on top with multiply blend to show robot through
       this.iframe = document.createElement('iframe');
       this.iframe.style.cssText = `
         position: absolute;
@@ -377,7 +377,8 @@ class GaussianSplatController {
         height: 100%;
         border: none;
         pointer-events: none;
-        z-index: 0;
+        z-index: 2;
+        mix-blend-mode: multiply;
       `;
 
       // Use separate HTML file to avoid blob URL import issues
@@ -419,12 +420,6 @@ class GaussianSplatController {
           console.log('Hidden mesh for GS:', obj.name);
         }
       });
-
-      // Apply blend mode to canvas for proper compositing
-      const canvas = document.getElementById('mujoco-canvas');
-      if (canvas) {
-        canvas.style.mixBlendMode = 'lighten';
-      }
 
       this.enabled = true;
       console.log('3D Gaussian Splatting environment enabled');
@@ -479,12 +474,6 @@ class GaussianSplatController {
         mesh.visible = true;
       });
       this.hiddenMeshes = null;
-    }
-
-    // Remove blend mode from canvas
-    const canvas = document.getElementById('mujoco-canvas');
-    if (canvas) {
-      canvas.style.mixBlendMode = 'normal';
     }
 
     this.enabled = false;
