@@ -32,25 +32,25 @@
     <geom name="floor" size="0 0 0.05" type="plane" material="grid" contype="1" conaffinity="1" group="3" friction="0.5 0.02 0.01"/>
 
     <!-- Simple geometric objects for manipulation with high friction -->
-    <body name="sphere1" pos="0.5 -0.6 1">
+    <body name="sphere1" pos="0.55 -0.6 1">
       <freejoint/>
       <geom type="sphere" size="0.02" material="obj_green" mass="0.04"
             contype="1" conaffinity="1" friction="1.2 0.05 0.01" condim="4"/>
     </body>
 
-    <body name="cylinder1" pos="0.4 -0.6 1">
+    <body name="cylinder1" pos="0.45 -0.6 1">
       <freejoint/>
       <geom type="cylinder" size="0.02 0.06" material="obj_blue" mass="0.04"
             contype="1" conaffinity="1" friction="1.2 0.05 0.01" condim="4"/>
     </body>
 
-    <body name="box2" pos="0.3 -0.6 1">
+    <body name="box2" pos="0.25 -0.6 1">
       <freejoint/>
-      <geom type="box" size="0.02 0.02 0.02" material="obj_yellow" mass="0.04"
+      <geom type="box" size="0.015 0.015 0.03" material="obj_yellow" mass="0.04"
             contype="1" conaffinity="1" friction="1.2 0.05 0.01" condim="4"/>
     </body>
 
-    <body name="sphere2" pos="0.2 -0.6 1">
+    <body name="sphere2" pos="0.15 -0.6 1">
       <freejoint/>
       <geom type="sphere" size="0.025" material="obj_red" mass="0.04"
             contype="1" conaffinity="1" friction="1.2 0.05 0.01" condim="4"/>
