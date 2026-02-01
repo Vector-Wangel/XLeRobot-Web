@@ -56,7 +56,7 @@
     <light directional="true" pos="-0.5 0.5 3" dir="0 0 -1"/>
 
     <!-- Single SO101 Arm mounted on fixed base -->
-    <body name="Base" pos="0 -0.2 0.8" euler="0 0 0">
+    <body name="Base" pos="0.35 -0.3 0.8" euler="0 0 0">
       <inertial pos="0.0137179 -5.19711e-05 0.0334843" mass="0.147" fullinertia="0.000114686 0.000136117 0.000130364 -4.59787e-07 4.97151e-06 9.75275e-08"/>
       <!-- Visual meshes -->
       <geom type="mesh" mesh="Base" material="white" class="visual"/>
