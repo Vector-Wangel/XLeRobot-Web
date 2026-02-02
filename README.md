@@ -37,6 +37,7 @@ Load and Run MuJoCo 3.3.8 Models using JavaScript and the official MuJoCo WebAss
   
 - **Import any scene**: use any 3DGS scene you want (recommend: [Marble from World Labs](https://marble.worldlabs.ai/))
   - <img width="1944" height="1149" alt="06d77cabe9060f3cfa65d8fbbe9fd875" src="https://github.com/user-attachments/assets/e3423ffd-12c9-4822-a0fe-fb143faff37e" />
+  - If you upload your own 3DGS file, there will not be any collision
   
 
 
@@ -131,6 +132,7 @@ mujoco.mj_applyFT(model, data, [fx, fy, fz], [tx, ty, tz], [px, py, pz], bodyId,
 data.delete();
 model.delete();
 ```
+
 
 
 
