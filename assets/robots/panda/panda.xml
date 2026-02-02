@@ -5,6 +5,7 @@
 
   <default>
     <default class="panda">
+    
       <material specular="0.1" shininess="0.1"/>
       <joint armature="0.1" damping="1" axis="0 0 1" range="-2.8973 2.8973"/>
       <general dyntype="none" biastype="affine" ctrlrange="-2.8973 2.8973" forcerange="-87 87"/>
@@ -127,6 +128,7 @@
   </asset>
 
   <worldbody>
+  <light pos="1 0 2.5" dir="-1 0 -1" directional="true" diffuse="0.15 0.15 0.15" specular="0 0 0"/>
     <body name="link0" childclass="panda" pos="0 0 0.8" euler="0 0 -1.5708">
       <inertial mass="0.629769" pos="-0.041018 -0.00014 0.049974"
         fullinertia="0.00315 0.00388 0.004285 8.2904e-7 0.00015 8.2299e-6"/>
