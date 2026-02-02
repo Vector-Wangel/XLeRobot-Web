@@ -1,7 +1,7 @@
 /**
  * Keyboard Control Module for MuJoCo Scenes
  *
- * Provides configurable keyboard controls for different scenes.
+ * Provides configurable keyboard controls for different robots.
  * Supports both simple control mappings and complex controllers with IK.
  */
 
@@ -10,27 +10,27 @@ import { PandaController } from './controllers/PandaController.js';
 import { SO101Controller } from './controllers/SO101Controller.js';
 
 // ============================================================================
-// Scene Configuration
+// Robot Control Configurations
 // ============================================================================
 
-// Scene-specific control configurations
-const SCENE_CONFIGS = {
-  'xlerobot/scene.xml': {
+// Robot-specific control configurations (keyed by robot name)
+const ROBOT_CONFIGS = {
+  'xlerobot': {
     type: 'custom',
     controller: new XLeRobotController(),
     description: 'XLeRobot Dual-Arm Control'
   },
-  'xlerobot/scene_arm.xml': {
+  'SO101': {
     type: 'custom',
     controller: new SO101Controller(),
     description: 'SO101 Single-Arm Control'
   },
-  'franka_emika_panda/scene.xml': {
+  'panda': {
     type: 'custom',
     controller: new PandaController(),
     description: 'Panda DLS IK Control'
   }
-  // Add more scenes here as needed
+  // humanoid has no keyboard control
 };
 
 // ============================================================================
@@ -53,37 +53,38 @@ export class KeyboardController {
   }
 
   /**
-   * Get configuration for a scene
-   * @param {string} sceneName - The scene filename
+   * Get configuration for a robot
+   * @param {string} robotName - The robot name (e.g., 'xlerobot', 'SO101', 'panda')
    * @returns {object|null} - Configuration object or null if not configured
    */
-  getConfig(sceneName) {
-    return SCENE_CONFIGS[sceneName] || null;
+  getConfig(robotName) {
+    return ROBOT_CONFIGS[robotName] || null;
   }
 
   /**
-   * Check if a scene has keyboard control configured
-   * @param {string} sceneName - The scene filename
+   * Check if a robot has keyboard control configured
+   * @param {string} robotName - The robot name
    * @returns {boolean}
    */
-  hasConfig(sceneName) {
-    return sceneName in SCENE_CONFIGS;
+  hasConfig(robotName) {
+    return robotName in ROBOT_CONFIGS;
   }
 
   /**
-   * Enable keyboard control for a scene
-   * @param {string} sceneName - The scene filename
+   * Enable keyboard control for a robot
+   * @param {string} robotName - The robot name
    * @param {object} model - MuJoCo model
    * @param {object} data - MuJoCo data
    * @param {object} mujoco - MuJoCo WASM module (optional, needed for IK)
    * @returns {boolean} - Whether enabling was successful
    */
-  enable(sceneName, model, data, mujoco = null) {
+  enable(robotName, model, data, mujoco = null) {
     // Disable any existing control first
     this.disable();
 
-    const config = this.getConfig(sceneName);
+    const config = this.getConfig(robotName);
     if (!config) {
+      console.log(`No keyboard control configured for robot: ${robotName}`);
       return false;
     }
 
@@ -132,6 +133,7 @@ export class KeyboardController {
     document.addEventListener('keyup', this._onKeyUp);
 
     this.enabled = true;
+    console.log(`Keyboard control enabled for robot: ${robotName}`);
     return true;
   }
 
