@@ -173,13 +173,13 @@ export function setupGUI(parentContext) {
             const blobUrl = URL.createObjectURL(blob);
 
             // Disable existing GS if any
-            if (parentContext.gaussianSplats && parentContext.gaussianSplats.enabled) {
-              parentContext.gaussianSplats.disable();
+            if (parentContext.gsController && parentContext.gsController.enabled) {
+              parentContext.gsController.disable();
             }
 
             // Enable with custom SPZ blob URL
-            if (parentContext.gaussianSplats) {
-              await parentContext.gaussianSplats.enable(blobUrl);
+            if (parentContext.gsController) {
+              await parentContext.gsController.enable(blobUrl);
               console.log('Custom 3DGS loaded from uploaded SPZ');
             }
           }
