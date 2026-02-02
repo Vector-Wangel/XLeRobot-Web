@@ -56,6 +56,11 @@ export class PandaController extends BaseController {
     this.POS_MIN = [-0.8, -0.8, 0.82];
     this.POS_MAX = [0.8, 0.8, 1.6];
 
+    // IK frequency control - reduce computation load
+    this.IK_SKIP_FRAMES = 10;  // Only compute IK every N physics steps
+    this.frameCounter = 0;
+    this.cachedCtrl = new Array(7).fill(0);  // Cache arm control values
+
     // State
     this.state = null;
     this.mujoco = null;
@@ -431,9 +436,17 @@ export class PandaController extends BaseController {
     mujoco.mj_forward(model, data);
 
     this._initState(data);
+
+    // Initialize cached control values from current joint positions
+    for (let i = 0; i < this.ARM_JOINT_INDICES.length; i++) {
+      const jointIdx = this.ARM_JOINT_INDICES[i];
+      this.cachedCtrl[i] = data.qpos[jointIdx];
+    }
+    this.frameCounter = 0;
+
     this.initialized = true;
 
-    console.log('PandaController initialized with DLS IK');
+    console.log('PandaController initialized with DLS IK (skip frames:', this.IK_SKIP_FRAMES, ')');
     console.log('Initial EE position:', this.state.targetPos);
   }
 
@@ -447,6 +460,13 @@ export class PandaController extends BaseController {
       this.mujoco.mj_forward(model, data);
     }
     this._initState(data);
+
+    // Reset cached control values
+    for (let i = 0; i < this.ARM_JOINT_INDICES.length; i++) {
+      const jointIdx = this.ARM_JOINT_INDICES[i];
+      this.cachedCtrl[i] = data.qpos[jointIdx];
+    }
+    this.frameCounter = 0;
 
     // Reset cube ("box") to initial position [0.1, -0.4, 1]
     const boxBodyId = this._getBodyId(model, 'box');
@@ -541,30 +561,39 @@ export class PandaController extends BaseController {
 
     // ========================================
     // Apply IK (6-DOF: position + orientation)
+    // Only compute every N frames to reduce load
     // ========================================
-    this._clampPosition();
+    this.frameCounter++;
 
-    // Solve IK with position and orientation
-    this._solveIK(this.state.targetPos, this.state.targetQuat, model, data);
+    if (this.frameCounter % this.IK_SKIP_FRAMES === 0) {
+      this._clampPosition();
 
-    // Set control targets to solved joint positions
+      // Solve IK with position and orientation (expensive: ~40 mj_forward calls)
+      this._solveIK(this.state.targetPos, this.state.targetQuat, model, data);
+
+      // Cache control values
+      for (let i = 0; i < this.ARM_JOINT_INDICES.length; i++) {
+        const jointIdx = this.ARM_JOINT_INDICES[i];
+        this.cachedCtrl[i] = data.qpos[jointIdx];
+      }
+    }
+
+    // Apply cached control values every frame
     for (let i = 0; i < this.ARM_JOINT_INDICES.length; i++) {
-      const jointIdx = this.ARM_JOINT_INDICES[i];
-      data.ctrl[i] = data.qpos[jointIdx];
+      data.ctrl[i] = this.cachedCtrl[i];
     }
 
     // ========================================
-    // Gravity Compensation
+    // Gravity Compensation (every frame)
     // ========================================
-    // Apply feedforward torque to counteract gravity
-    // qfrc_bias contains gravity + Coriolis forces
     for (let i = 0; i < this.ARM_JOINT_INDICES.length; i++) {
       const jointIdx = this.ARM_JOINT_INDICES[i];
-      // Add gravity compensation torque directly
       data.qfrc_applied[jointIdx] = data.qfrc_bias[jointIdx];
     }
 
-    // Gripper control - both fingers move together
+    // ========================================
+    // Gripper control (every frame - responsive)
+    // ========================================
     const gripperValue = this.state.gripperOpen ? this.GRIPPER_OPEN : this.GRIPPER_CLOSED;
     data.ctrl[this.GRIPPER_ACTUATOR_IDX_1] = gripperValue;
     data.ctrl[this.GRIPPER_ACTUATOR_IDX_2] = gripperValue;
