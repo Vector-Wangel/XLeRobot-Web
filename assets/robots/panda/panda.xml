@@ -19,6 +19,10 @@
       <default class="collision">
         <geom type="mesh" group="3" contype="1" conaffinity="1"
               friction="2 0.1 0.05" condim="4" solref="0.002 1.0" solimp="0.95 0.99 0.001"/>
+        <default class="finger_collision">
+          <geom type="mesh" group="3" contype="1" conaffinity="1"
+                friction="3 0.2 0.1" condim="6" solref="0.002 1.0" solimp="0.95 0.99 0.001"/>
+        </default>
         <default class="fingertip_pad_collision_1">
           <geom type="box" size="0.0085 0.004 0.0085" pos="0 0.0055 0.0445"
                 friction="3 0.2 0.1" condim="6" contype="1" conaffinity="1"
@@ -235,7 +239,7 @@
                         <joint name="finger_joint1" class="finger"/>
                         <geom mesh="finger_0" material="off_white" class="visual"/>
                         <geom mesh="finger_1" material="black" class="visual"/>
-                        <geom mesh="finger_0" class="collision"/>
+                        <geom mesh="finger_0" class="finger_collision"/>
                         <geom class="fingertip_pad_collision_1"/>
                         <geom class="fingertip_pad_collision_2"/>
                         <geom class="fingertip_pad_collision_3"/>
@@ -247,7 +251,7 @@
                         <joint name="finger_joint2" class="finger"/>
                         <geom mesh="finger_0" material="off_white" class="visual"/>
                         <geom mesh="finger_1" material="black" class="visual"/>
-                        <geom mesh="finger_0" class="collision"/>
+                        <geom mesh="finger_0" class="finger_collision"/>
                         <geom class="fingertip_pad_collision_1"/>
                         <geom class="fingertip_pad_collision_2"/>
                         <geom class="fingertip_pad_collision_3"/>
