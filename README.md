@@ -29,10 +29,11 @@ Load and Run MuJoCo 3.3.8 Models using JavaScript and the official MuJoCo WebAss
 - **Mouse Interaction**: Click and drag any physics object in the scene
 
 - **Import any robot**: By uploading the whole folder (without the scene.xml, find available robots at [MuJoCo Menagerie](https://github.com/google-deepmind/mujoco_menagerie))
-  - <img width="1737" height="732" alt="image" src="https://github.com/user-attachments/assets/fba08231-0dfd-4bc6-bec6-458b6abc58d5" />
+
+<img width="1737" height="732" alt="image" src="https://github.com/user-attachments/assets/fba08231-0dfd-4bc6-bec6-458b6abc58d5" />
   
 - **Import any scene**: use any 3DGS scene you want (recommend: [Marble from World Labs](https://marble.worldlabs.ai/))
-  - <img width="1944" height="1149" alt="06d77cabe9060f3cfa65d8fbbe9fd875" src="https://github.com/user-attachments/assets/e3423ffd-12c9-4822-a0fe-fb143faff37e" />
+- <img width="1944" height="1149" alt="06d77cabe9060f3cfa65d8fbbe9fd875" src="https://github.com/user-attachments/assets/e3423ffd-12c9-4822-a0fe-fb143faff37e" />
   - If you upload your own 3DGS file, there will not be any collision
   
 
@@ -132,6 +133,7 @@ model.delete();
 ## 🙏 Acknowledgements
 
 This project is built based on [mujoco-wasm](https://github.com/zalo/mujoco_wasm) and [sparkjs](https://sparkjs.dev/).
+
 
 
 
