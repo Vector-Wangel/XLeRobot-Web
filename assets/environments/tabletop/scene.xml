@@ -1,8 +1,6 @@
-<mujoco model="SO101 scene">
+<mujoco model="tabletop environment">
 
-  <include file="SO101.xml"/>
-
-  <statistic center="0 0 0.3" extent="1.5"/>
+  <statistic center="0 0 1.0" extent="2.0"/>
 
   <visual>
     <headlight diffuse="0.4 0.4 0.4" ambient="0.2 0.2 0.2" specular="0 0 0"/>
@@ -14,11 +12,6 @@
     <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0" width="512" height="3072"/>
     <texture name="grid" type="2d" builtin="checker" width="256" height="256" rgb1=".1 .2 .3" rgb2=".2 .3 .4"/>
     <material name="grid" texture="grid" texrepeat="1 1" texuniform="true" reflectance=".2"/>
-    <material name="obj_red" rgba="0.5 0.1 0.1 1"/>
-    <material name="obj_green" rgba="0.1 0.5 0.1 1"/>
-    <material name="obj_blue" rgba="0.1 0.1 0.5 1"/>
-    <material name="obj_yellow" rgba="0.3 0.3 0.1 1"/>
-    <material name="obj_table" rgba="0.8 0.8 0.8 1"/>
   </asset>
 
   <default>
@@ -27,36 +20,12 @@
   </default>
 
   <worldbody>
-    <light pos="0 0 3" dir="0 0 -1" directional="false"/>
-    <!-- Floor -->
+    <light pos="0 0 5" dir="0 0 -1" directional="false"/>
+
+    <!-- Floor with lower friction for easier movement -->
     <geom name="floor" size="0 0 0.05" type="plane" material="grid" contype="1" conaffinity="1" group="3" friction="0.5 0.02 0.01"/>
 
-    <!-- Simple geometric objects for manipulation with high friction -->
-    <body name="sphere1" pos="0.55 -0.6 1">
-      <freejoint/>
-      <geom type="sphere" size="0.02" material="obj_green" mass="0.04"
-            contype="1" conaffinity="1" friction="1.2 0.05 0.01" condim="4"/>
-    </body>
-
-    <body name="cylinder1" pos="0.45 -0.6 1">
-      <freejoint/>
-      <geom type="cylinder" size="0.02 0.06" material="obj_blue" mass="0.04"
-            contype="1" conaffinity="1" friction="1.2 0.05 0.01" condim="4"/>
-    </body>
-
-    <body name="box2" pos="0.25 -0.6 1">
-      <freejoint/>
-      <geom type="box" size="0.015 0.015 0.03" material="obj_yellow" mass="0.04"
-            contype="1" conaffinity="1" friction="1.2 0.05 0.01" condim="4"/>
-    </body>
-
-    <body name="sphere2" pos="0.15 -0.6 1">
-      <freejoint/>
-      <geom type="sphere" size="0.025" material="obj_red" mass="0.04"
-            contype="1" conaffinity="1" friction="1.2 0.05 0.01" condim="4"/>
-    </body>
-
-    <!-- Small table -->
+    <!-- Environment collision boxes (invisible, for physics only) -->
     <body name="table1" pos="1.35 0.02 0.41">
       <geom type="box" size="0.35 0.88 0.41" rgba="0.6 0.4 0.2 0.01" mass="0.1"
             contype="1" conaffinity="1" friction="1.0 0.05 0.01" condim="4" group="3"/>

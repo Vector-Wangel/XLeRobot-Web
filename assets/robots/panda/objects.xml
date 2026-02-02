@@ -1,0 +1,17 @@
+<mujoco model="panda objects">
+
+  <asset>
+    <material name="obj_green" rgba="0.1 0.5 0.1 1"/>
+  </asset>
+
+  <worldbody>
+    <!-- Manipulable cube for Panda -->
+    <body name="box" pos="0.1 -0.4 1">
+      <freejoint/>
+      <geom type="box" name="box" size="0.02 0.02 0.03" condim="6" mass="0.05"
+        friction="3 0.2 0.1" material="obj_green" contype="1" conaffinity="1"
+        solref="0.002 1.0" solimp="0.95 0.99 0.001"/>
+    </body>
+  </worldbody>
+
+</mujoco>

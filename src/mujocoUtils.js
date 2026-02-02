@@ -2,16 +2,48 @@ import * as THREE from 'three';
 import { Reflector  } from './utils/Reflector.js';
 import { MuJoCoDemo } from './main.js';
 import { keyboardController } from './utils/KeyboardControl.js';
+import { getSceneManager } from './utils/SceneManager.js';
+
+/**
+ * Load a modular scene (environment + robot + objects)
+ * @param {MuJoCoDemo} context - Demo context
+ * @param {string} envName - Environment name (e.g., 'tabletop')
+ * @param {string} robotName - Robot name (e.g., 'xlerobot', 'SO101', 'panda')
+ */
+export async function loadModularScene(context, envName, robotName) {
+  const sceneManager = getSceneManager(context.mujoco);
+
+  // Delete the old scene
+  context.scene.remove(context.scene.getObjectByName("MuJoCo Root"));
+
+  // Load modular scene - this creates merged XML
+  const scenePath = await sceneManager.loadModularScene(envName, robotName);
+
+  // Update params for compatibility
+  context.params.scene = scenePath;
+  context.params.robot = robotName;
+  context.params.environment = envName;
+
+  // Load the merged scene using existing loading function
+  [context.model, context.data, context.bodies, context.lights] =
+    await loadSceneFromURL(context.mujoco, scenePath, context);
+
+  context.mujoco.mj_forward(context.model, context.data);
+
+  // Run update callbacks
+  for (let i = 0; i < context.updateGUICallbacks.length; i++) {
+    context.updateGUICallbacks[i](context.model, context.data, context.params);
+  }
+
+  return sceneManager;
+}
 
 export async function reloadFunc() {
-  // Delete the old scene and load the new scene
-  this.scene.remove(this.scene.getObjectByName("MuJoCo Root"));
-  [this.model, this.data, this.bodies, this.lights] =
-    await loadSceneFromURL(this.mujoco, this.params.scene, this);
-  this.mujoco.mj_forward(this.model, this.data);
-  for (let i = 0; i < this.updateGUICallbacks.length; i++) {
-    this.updateGUICallbacks[i](this.model, this.data, this.params);
-  }
+  // Reload the current scene
+  const envName = this.params.environment || 'tabletop';
+  const robotName = this.params.robot || 'xlerobot';
+
+  await loadModularScene(this, envName, robotName);
 }
 
 /** @param {MuJoCoDemo} parentContext*/
@@ -25,14 +57,67 @@ export function setupGUI(parentContext) {
     parentContext.controls.target.set(0, 0.7, 0);
     parentContext.controls.update(); });
 
-  // Add scene selection dropdown.
-  let reload = reloadFunc.bind(parentContext);
-  parentContext.gui.add(parentContext.params, 'scene', {
-    "Humanoid": "humanoid.xml",
-    "XLeRobot": "xlerobot/scene.xml",
-    "SO101": "xlerobot/scene_arm.xml",
-    "Panda": "franka_emika_panda/scene.xml",
-  }).name('Example Scene').onChange(reload);
+  // Initialize modular scene params
+  parentContext.params.environment = parentContext.params.environment || 'tabletop';
+  parentContext.params.robot = parentContext.params.robot || 'xlerobot';
+
+  // Scene loading function for modular scenes
+  const loadScene = async () => {
+    await loadModularScene(parentContext, parentContext.params.environment, parentContext.params.robot);
+  };
+
+  // Add environment selection dropdown
+  parentContext.gui.add(parentContext.params, 'environment', {
+    "Tabletop": "tabletop"
+  }).name('Environment').onChange(loadScene);
+
+  // Add robot selection dropdown
+  parentContext.gui.add(parentContext.params, 'robot', {
+    "XLeRobot": "xlerobot",
+    "SO101": "SO101",
+    "Panda": "panda",
+    "Humanoid": "humanoid"
+  }).name('Robot').onChange(loadScene);
+
+  // Add upload robot button
+  const uploadRobotBtn = {
+    uploadRobot: () => {
+      // Create hidden file input for folder upload
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.webkitdirectory = true;
+      input.multiple = true;
+      input.onchange = async (e) => {
+        const files = e.target.files;
+        if (files.length === 0) return;
+
+        try {
+          console.log('Uploading robot folder with', files.length, 'files');
+          const sceneManager = getSceneManager(parentContext.mujoco);
+          const scenePath = await sceneManager.loadUploadedRobot(files, parentContext.params.environment);
+
+          // Load the merged scene
+          parentContext.params.scene = scenePath;
+          [parentContext.model, parentContext.data, parentContext.bodies, parentContext.lights] =
+            await loadSceneFromURL(parentContext.mujoco, scenePath, parentContext);
+
+          parentContext.mujoco.mj_forward(parentContext.model, parentContext.data);
+
+          // Run update callbacks
+          for (let i = 0; i < parentContext.updateGUICallbacks.length; i++) {
+            parentContext.updateGUICallbacks[i](parentContext.model, parentContext.data, parentContext.params);
+          }
+
+          console.log('Custom robot loaded successfully');
+        } catch (err) {
+          console.error('Failed to load uploaded robot:', err);
+          alert('Failed to load robot: ' + err.message);
+        }
+      };
+      input.click();
+    }
+  };
+  parentContext.gui.add(uploadRobotBtn, 'uploadRobot').name('Upload Robot Folder');
 
   // Add a help menu.
   // Parameters:
@@ -677,31 +762,39 @@ export function drawTendonsAndFlex(mujocoRoot, model, data) {
   }
 }
 
-/** Downloads the scenes/assets folder to MuJoCo's virtual filesystem
+/** Downloads the robots folder to MuJoCo's virtual filesystem
  * @param {mujoco} mujoco */
 export async function downloadExampleScenesFolder(mujoco) {
-  // Load file list from index.json
-  const indexResponse = await fetch("./assets/scenes/index.json");
+  // Load file list from index.json (now in assets/robots/)
+  const indexResponse = await fetch("./assets/robots/index.json");
   const allFiles = await indexResponse.json();
-  
+
   // Convert Windows-style paths to forward slashes for web
   const normalizedFiles = allFiles.map(file => file.replace(/\\/g, "/"));
 
-  let requests = normalizedFiles.map((url) => fetch("./assets/scenes/" + url));
+  let requests = normalizedFiles.map((url) => fetch("./assets/robots/" + url));
   let responses = await Promise.all(requests);
   for (let i = 0; i < responses.length; i++) {
+      // Files go to /working/robots/...
       let split = normalizedFiles[i].split("/");
-      let working = '/working/';
+      let working = '/working/robots/';
+
+      // Ensure robots directory exists
+      if (!mujoco.FS.analyzePath('/working/robots').exists) {
+        mujoco.FS.mkdir('/working/robots');
+      }
+
       for (let f = 0; f < split.length - 1; f++) {
           working += split[f];
           if (!mujoco.FS.analyzePath(working).exists) { mujoco.FS.mkdir(working); }
           working += "/";
       }
 
+      const filePath = "/working/robots/" + normalizedFiles[i];
       if (normalizedFiles[i].endsWith(".png") || normalizedFiles[i].endsWith(".stl") || normalizedFiles[i].endsWith(".skn") || normalizedFiles[i].endsWith(".obj") || normalizedFiles[i].endsWith(".ply")) {
-          mujoco.FS.writeFile("/working/" + normalizedFiles[i], new Uint8Array(await responses[i].arrayBuffer()));
+          mujoco.FS.writeFile(filePath, new Uint8Array(await responses[i].arrayBuffer()));
       } else {
-          mujoco.FS.writeFile("/working/" + normalizedFiles[i], await responses[i].text());
+          mujoco.FS.writeFile(filePath, await responses[i].text());
       }
   }
 }

@@ -3,9 +3,10 @@ import * as THREE           from 'three';
 import { GUI              } from '../node_modules/three/examples/jsm/libs/lil-gui.module.min.js';
 import { OrbitControls    } from '../node_modules/three/examples/jsm/controls/OrbitControls.js';
 import { DragStateManager } from './utils/DragStateManager.js';
-import { setupGUI, downloadExampleScenesFolder, loadSceneFromURL, drawTendonsAndFlex, getPosition, getQuaternion, toMujocoPos, standardNormal } from './mujocoUtils.js';
+import { setupGUI, downloadExampleScenesFolder, loadSceneFromURL, loadModularScene, drawTendonsAndFlex, getPosition, getQuaternion, toMujocoPos, standardNormal } from './mujocoUtils.js';
 import { keyboardController } from './utils/KeyboardControl.js';
 import   load_mujoco        from '../node_modules/mujoco-js/dist/mujoco_wasm.js';
+import { getSceneManager } from './utils/SceneManager.js';
 
 // ===== 新增：后处理相关 =====
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -17,21 +18,32 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 const mujoco = await load_mujoco();
 
 // Set up Emscripten's Virtual File System
-var initialScene = "humanoid.xml";
 mujoco.FS.mkdir('/working');
 mujoco.FS.mount(mujoco.MEMFS, { root: '.' }, '/working');
-mujoco.FS.writeFile("/working/" + initialScene, await(await fetch("./assets/scenes/" + initialScene)).text());
+
+// Default modular scene settings
+const initialEnvironment = 'tabletop';
+const initialRobot = 'xlerobot';
 
 export class MuJoCoDemo {
   constructor() {
     this.mujoco = mujoco;
 
-    // Load in the state from XML
-    this.model = mujoco.MjModel.loadFromXML("/working/" + initialScene);
-    this.data  = new mujoco.MjData(this.model);
+    // Model and data will be initialized in init() via modular loading
+    this.model = null;
+    this.data = null;
 
     // Define Random State Variables
-    this.params = { scene: initialScene, paused: false, help: false, ctrlnoiserate: 0.0, ctrlnoisestd: 0.0, keyframeNumber: 0 };
+    this.params = {
+      scene: null,
+      environment: initialEnvironment,
+      robot: initialRobot,
+      paused: false,
+      help: false,
+      ctrlnoiserate: 0.0,
+      ctrlnoisestd: 0.0,
+      keyframeNumber: 0
+    };
     this.mujoco_time = 0.0;
     this.bodies  = {}, this.lights = {};
     this.tmpVec  = new THREE.Vector3();
@@ -205,9 +217,11 @@ export class MuJoCoDemo {
     // Download the the examples to MuJoCo's virtual file system
     await downloadExampleScenesFolder(mujoco);
 
-    // Initialize the three.js Scene using the .xml Model in initialScene
-    [this.model, this.data, this.bodies, this.lights] =
-      await loadSceneFromURL(mujoco, initialScene, this);
+    // Initialize scene manager
+    this.sceneManager = getSceneManager(mujoco);
+
+    // Load initial modular scene (environment + robot + objects)
+    await loadModularScene(this, this.params.environment, this.params.robot);
 
     this.gui = new GUI();
     setupGUI(this);
@@ -225,6 +239,12 @@ export class MuJoCoDemo {
 
   render(timeMS) {
     this.controls.update();
+
+    // Skip physics if model not yet loaded
+    if (!this.model || !this.data) {
+      this.renderer.render(this.scene, this.camera);
+      return;
+    }
 
     if (!this.params["paused"]) {
       let timestep = this.model.opt.timestep;
@@ -503,7 +523,7 @@ gsToggleBtn.onclick = async () => {
   gsToggleBtn.textContent = '⏳ Loading...';
 
   try {
-    const enabled = await gsController.toggle('./assets/scene.spz');
+    const enabled = await gsController.toggle('./assets/environments/tabletop/scene.spz');
 
     gsToggleBtn.textContent = enabled ? '🌍 Disable 3D Environment' : '🌍 Enable 3D Environment';
     gsToggleBtn.style.background = enabled

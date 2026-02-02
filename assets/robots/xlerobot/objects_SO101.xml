@@ -1,0 +1,37 @@
+<mujoco model="SO101 objects">
+
+  <asset>
+    <material name="obj_red" rgba="0.5 0.1 0.1 1"/>
+    <material name="obj_green" rgba="0.1 0.5 0.1 1"/>
+    <material name="obj_blue" rgba="0.1 0.1 0.5 1"/>
+    <material name="obj_yellow" rgba="0.3 0.3 0.1 1"/>
+  </asset>
+
+  <worldbody>
+    <!-- Manipulable objects for SO101 single arm -->
+    <body name="sphere1" pos="0.55 -0.6 1">
+      <freejoint/>
+      <geom type="sphere" size="0.02" material="obj_green" mass="0.04"
+            contype="1" conaffinity="1" friction="1.2 0.05 0.01" condim="4"/>
+    </body>
+
+    <body name="cylinder1" pos="0.45 -0.6 1">
+      <freejoint/>
+      <geom type="cylinder" size="0.02 0.06" material="obj_blue" mass="0.04"
+            contype="1" conaffinity="1" friction="1.2 0.05 0.01" condim="4"/>
+    </body>
+
+    <body name="box2" pos="0.25 -0.6 1">
+      <freejoint/>
+      <geom type="box" size="0.015 0.015 0.03" material="obj_yellow" mass="0.04"
+            contype="1" conaffinity="1" friction="1.2 0.05 0.01" condim="4"/>
+    </body>
+
+    <body name="sphere2" pos="0.15 -0.6 1">
+      <freejoint/>
+      <geom type="sphere" size="0.025" material="obj_red" mass="0.04"
+            contype="1" conaffinity="1" friction="1.2 0.05 0.01" condim="4"/>
+    </body>
+  </worldbody>
+
+</mujoco>
