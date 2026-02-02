@@ -129,6 +129,82 @@ export function setupGUI(parentContext) {
   };
   parentContext.gui.add(uploadRobotBtn, 'uploadRobot').name('Upload Robot Folder');
 
+  // Add upload SPZ button for custom 3DGS scenes
+  const uploadSpzBtn = {
+    uploadSpz: () => {
+      // Create hidden file input for SPZ upload
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.spz';
+      input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        try {
+          console.log('Uploading SPZ file:', file.name);
+
+          // Remove the old scene first
+          const oldMujocoRoot = parentContext.scene.getObjectByName("MuJoCo Root");
+          if (oldMujocoRoot) {
+            parentContext.scene.remove(oldMujocoRoot);
+          }
+
+          const sceneManager = getSceneManager(parentContext.mujoco);
+
+          // Load custom SPZ with current robot (or no robot)
+          const robotName = parentContext.params.robot;
+          const scenePath = await sceneManager.loadCustomSpz(file, robotName);
+
+          // Update params
+          parentContext.params.scene = scenePath;
+          parentContext.params.environment = 'custom_spz';
+
+          // Load the new scene
+          [parentContext.model, parentContext.data, parentContext.bodies, parentContext.lights] =
+            await loadSceneFromURL(parentContext.mujoco, scenePath, parentContext);
+
+          parentContext.mujoco.mj_forward(parentContext.model, parentContext.data);
+
+          // Reload 3DGS with custom SPZ data
+          if (sceneManager.hasCustomSpz()) {
+            const spzData = sceneManager.getCustomSpzData();
+            // Create blob URL from ArrayBuffer
+            const blob = new Blob([spzData], { type: 'application/octet-stream' });
+            const blobUrl = URL.createObjectURL(blob);
+
+            // Disable existing GS if any
+            if (parentContext.gaussianSplats && parentContext.gaussianSplats.enabled) {
+              parentContext.gaussianSplats.disable();
+            }
+
+            // Enable with custom SPZ blob URL
+            if (parentContext.gaussianSplats) {
+              await parentContext.gaussianSplats.enable(blobUrl);
+              console.log('Custom 3DGS loaded from uploaded SPZ');
+            }
+          }
+
+          // Run update callbacks
+          for (let i = 0; i < parentContext.updateGUICallbacks.length; i++) {
+            parentContext.updateGUICallbacks[i](parentContext.model, parentContext.data, parentContext.params);
+          }
+
+          // Setup keyboard control if robot has config
+          if (keyboardController.hasConfig(robotName)) {
+            keyboardController.enable(robotName, parentContext.model, parentContext.data, parentContext.mujoco);
+          }
+
+          console.log('Custom SPZ scene loaded successfully');
+        } catch (err) {
+          console.error('Failed to load SPZ file:', err);
+          alert('Failed to load SPZ: ' + err.message);
+        }
+      };
+      input.click();
+    }
+  };
+  parentContext.gui.add(uploadSpzBtn, 'uploadSpz').name('Upload 3DGS (.spz)');
+
   // Add a help menu.
   // Parameters:
   //  Name: "Help".
