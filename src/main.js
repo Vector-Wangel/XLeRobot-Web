@@ -3,7 +3,7 @@ import * as THREE           from 'three';
 import { GUI              } from '../node_modules/three/examples/jsm/libs/lil-gui.module.min.js';
 import { OrbitControls    } from '../node_modules/three/examples/jsm/controls/OrbitControls.js';
 import { DragStateManager } from './utils/DragStateManager.js';
-import { setupGUI, downloadExampleScenesFolder, loadSceneFromURL, loadModularScene, drawTendonsAndFlex, getPosition, getQuaternion, toMujocoPos, standardNormal } from './mujocoUtils.js';
+import { setupGUI, downloadDefaultRobot, loadSceneFromURL, loadModularScene, drawTendonsAndFlex, getPosition, getQuaternion, toMujocoPos, standardNormal } from './mujocoUtils.js';
 import { keyboardController } from './utils/KeyboardControl.js';
 import   load_mujoco        from '../node_modules/mujoco-js/dist/mujoco_wasm.js';
 import { getSceneManager } from './utils/SceneManager.js';
@@ -214,8 +214,9 @@ export class MuJoCoDemo {
   }
 
   async init() {
-    // Download the the examples to MuJoCo's virtual file system
-    await downloadExampleScenesFolder(mujoco);
+    // Download only the default robot on startup (lazy loading)
+    // Other robots will be downloaded on-demand when selected
+    await downloadDefaultRobot(mujoco, 'xlerobot');
 
     // Initialize scene manager
     this.sceneManager = getSceneManager(mujoco);

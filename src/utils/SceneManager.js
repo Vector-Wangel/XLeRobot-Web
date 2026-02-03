@@ -6,6 +6,7 @@
  */
 
 import { RobotLoader, SceneConfigManager } from './RobotLoader.js';
+import { downloadRobotAssets, isRobotDownloaded } from '../mujocoUtils.js';
 
 export class SceneManager {
   /**
@@ -512,14 +513,26 @@ export class SceneManager {
    * @returns {Promise<boolean>} - Whether objects file exists
    */
   async _copyRobotToDir(robotName, targetDir) {
+    console.log(`_copyRobotToDir: robotName=${robotName}, targetDir=${targetDir}`);
     const robotConfig = SceneManager.ROBOT_CONFIGS[robotName];
     const robotDir = robotConfig.robotDir;
 
+    // Ensure robot assets are downloaded (lazy loading)
+    if (!isRobotDownloaded(robotDir)) {
+      console.log(`Robot ${robotDir} not yet downloaded, downloading now...`);
+      await downloadRobotAssets(this.mujoco, robotDir);
+      console.log(`Robot ${robotDir} download completed`);
+    } else {
+      console.log(`Robot ${robotDir} already downloaded`);
+    }
+
     if (robotConfig.meshDir) {
       this._ensureDir(`${targetDir}/assets`);
+      console.log(`Created assets directory: ${targetDir}/assets`);
     }
 
     // Copy robot XML
+    console.log(`Fetching robot XML from: ${robotConfig.xmlPath}`);
     const robotXmlResponse = await fetch(robotConfig.xmlPath);
     let robotXml = await robotXmlResponse.text();
     if (robotConfig.meshDir) {
@@ -536,6 +549,7 @@ export class SceneManager {
           const objectsXml = await objectsResponse.text();
           this._writeToFS(`${targetDir}/objects.xml`, objectsXml);
           hasObjects = true;
+          console.log(`Objects XML written: ${targetDir}/objects.xml`);
         }
       } catch (e) {
         console.log('No objects file for robot:', robotName);
@@ -544,7 +558,11 @@ export class SceneManager {
 
     // Copy mesh files
     if (robotConfig.meshDir) {
-      this._copyMeshFiles(`/working/robots/${robotDir}/assets`, `${targetDir}/assets`);
+      const srcMeshDir = `/working/robots/${robotDir}/assets`;
+      console.log(`Copying mesh files from: ${srcMeshDir}`);
+      this._copyMeshFiles(srcMeshDir, `${targetDir}/assets`);
+    } else {
+      console.log(`Robot ${robotName} has no mesh directory (uses primitives)`);
     }
 
     return hasObjects;
@@ -557,18 +575,30 @@ export class SceneManager {
    */
   _copyMeshFiles(srcDir, dstDir) {
     try {
+      // Check if source directory exists
+      const srcExists = this.mujoco.FS.analyzePath(srcDir).exists;
+      if (!srcExists) {
+        console.error(`Source mesh directory does not exist: ${srcDir}`);
+        return;
+      }
+
       const meshFiles = this.mujoco.FS.readdir(srcDir);
+      console.log(`Copying ${meshFiles.length - 2} mesh files from ${srcDir} to ${dstDir}`);
+
+      let copiedCount = 0;
       for (const file of meshFiles) {
         if (file === '.' || file === '..') continue;
         try {
           const content = this.mujoco.FS.readFile(`${srcDir}/${file}`);
           this.mujoco.FS.writeFile(`${dstDir}/${file}`, content);
+          copiedCount++;
         } catch (e) {
-          // Ignore copy errors for individual files
+          console.warn(`Failed to copy mesh file ${file}:`, e.message);
         }
       }
+      console.log(`Copied ${copiedCount} mesh files to ${dstDir}`);
     } catch (e) {
-      console.error('Failed to read mesh directory:', e);
+      console.error('Failed to read mesh directory:', srcDir, e);
     }
   }
 

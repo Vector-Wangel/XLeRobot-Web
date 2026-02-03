@@ -944,46 +944,121 @@ export function drawTendonsAndFlex(mujocoRoot, model, data) {
   }
 }
 
-/** Downloads the robots folder to MuJoCo's virtual filesystem
- * @param {mujoco} mujoco */
+// Track which robot directories have been downloaded
+const downloadedRobots = new Set();
+
+/**
+ * Check if a robot directory has been downloaded
+ * @param {string} robotDir - Robot directory name (e.g., 'xlerobot', 'panda')
+ * @returns {boolean}
+ */
+export function isRobotDownloaded(robotDir) {
+  return downloadedRobots.has(robotDir);
+}
+
+/**
+ * Download assets for a specific robot directory (lazy loading)
+ * @param {mujoco} mujoco - MuJoCo WASM module
+ * @param {string} robotDir - Robot directory name (e.g., 'xlerobot', 'panda', 'humanoid')
+ */
+export async function downloadRobotAssets(mujoco, robotDir) {
+  if (downloadedRobots.has(robotDir)) {
+    console.log(`Robot ${robotDir} already downloaded, skipping`);
+    return;
+  }
+
+  console.log(`Downloading robot assets: ${robotDir}...`);
+  const startTime = performance.now();
+
+  // Ensure base robots directory exists
+  if (!mujoco.FS.analyzePath('/working/robots').exists) {
+    mujoco.FS.mkdir('/working/robots');
+  }
+
+  // Load the robot's index.json
+  const indexResponse = await fetch(`./assets/robots/${robotDir}/index.json`);
+  if (!indexResponse.ok) {
+    throw new Error(`Failed to load index.json for robot: ${robotDir}`);
+  }
+  const files = await indexResponse.json();
+
+  // Normalize paths (Windows to Unix)
+  const normalizedFiles = files.map(file => file.replace(/\\/g, "/"));
+
+  // Fetch all files in parallel and fully download their bodies
+  const fileDataPromises = normalizedFiles.map(async (file) => {
+    const response = await fetch(`./assets/robots/${robotDir}/${file}`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch ${file}: ${response.status}`);
+    }
+    const isBinary = file.endsWith(".png") ||
+                     file.endsWith(".stl") ||
+                     file.endsWith(".skn") ||
+                     file.endsWith(".obj") ||
+                     file.endsWith(".ply");
+    const data = isBinary
+      ? new Uint8Array(await response.arrayBuffer())
+      : await response.text();
+    return { file, data, isBinary };
+  });
+
+  // Wait for ALL files to be fully downloaded (headers AND bodies)
+  const filesData = await Promise.all(fileDataPromises);
+  console.log(`All ${filesData.length} files downloaded for ${robotDir}, writing to VFS...`);
+
+  // Write files to VFS (now synchronous since all data is in memory)
+  for (const { file, data } of filesData) {
+    const filePath = `/working/robots/${robotDir}/${file}`;
+
+    // Ensure directories exist
+    const parts = file.split("/");
+    let working = `/working/robots/${robotDir}`;
+    if (!mujoco.FS.analyzePath(working).exists) {
+      mujoco.FS.mkdir(working);
+    }
+    for (let p = 0; p < parts.length - 1; p++) {
+      working += "/" + parts[p];
+      if (!mujoco.FS.analyzePath(working).exists) {
+        mujoco.FS.mkdir(working);
+      }
+    }
+
+    // Write file to VFS
+    mujoco.FS.writeFile(filePath, data);
+  }
+
+  downloadedRobots.add(robotDir);
+  const elapsed = (performance.now() - startTime).toFixed(0);
+  console.log(`Robot ${robotDir} downloaded (${normalizedFiles.length} files, ${elapsed}ms)`);
+
+  // Verify the assets directory exists if there are mesh files
+  const hasAssets = normalizedFiles.some(f => f.startsWith('assets/'));
+  if (hasAssets) {
+    const assetsPath = `/working/robots/${robotDir}/assets`;
+    const assetsExists = mujoco.FS.analyzePath(assetsPath).exists;
+    console.log(`Robot ${robotDir} assets directory exists: ${assetsExists} (${assetsPath})`);
+  }
+}
+
+/**
+ * Download default robot assets on startup (for fast initial load)
+ * @param {mujoco} mujoco - MuJoCo WASM module
+ * @param {string} defaultRobotDir - Default robot directory to download
+ */
+export async function downloadDefaultRobot(mujoco, defaultRobotDir = 'xlerobot') {
+  await downloadRobotAssets(mujoco, defaultRobotDir);
+}
+
+/**
+ * @deprecated Use downloadRobotAssets for lazy loading instead
+ * Downloads all robots folder to MuJoCo's virtual filesystem (legacy)
+ * @param {mujoco} mujoco
+ */
 export async function downloadExampleScenesFolder(mujoco) {
-  // Load file list from index.json (now in assets/robots/)
-  const indexResponse = await fetch("./assets/robots/index.json");
-  const allFiles = await indexResponse.json();
-
-  // Convert Windows-style paths to forward slashes for web
-  const normalizedFiles = allFiles.map(file => file.replace(/\\/g, "/"));
-
-  let requests = normalizedFiles.map((url) => fetch("./assets/robots/" + url));
-  let responses = await Promise.all(requests);
-  for (let i = 0; i < responses.length; i++) {
-      // Files go to /working/robots/...
-      let split = normalizedFiles[i].split("/");
-      let working = '/working/robots/';
-
-      // Ensure robots directory exists
-      if (!mujoco.FS.analyzePath('/working/robots').exists) {
-        mujoco.FS.mkdir('/working/robots');
-      }
-
-      for (let f = 0; f < split.length - 1; f++) {
-          working += split[f];
-          if (!mujoco.FS.analyzePath(working).exists) { mujoco.FS.mkdir(working); }
-          working += "/";
-      }
-
-      const filePath = "/working/robots/" + normalizedFiles[i];
-      // Binary files: meshes and textures
-      const isBinary = normalizedFiles[i].endsWith(".png") ||
-                       normalizedFiles[i].endsWith(".stl") ||
-                       normalizedFiles[i].endsWith(".skn") ||
-                       normalizedFiles[i].endsWith(".obj") ||
-                       normalizedFiles[i].endsWith(".ply");
-      if (isBinary) {
-          mujoco.FS.writeFile(filePath, new Uint8Array(await responses[i].arrayBuffer()));
-      } else {
-          mujoco.FS.writeFile(filePath, await responses[i].text());
-      }
+  // For backward compatibility, download all known robots
+  const robotDirs = ['humanoid', 'panda', 'xlerobot'];
+  for (const robotDir of robotDirs) {
+    await downloadRobotAssets(mujoco, robotDir);
   }
 }
 
