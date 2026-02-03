@@ -20,13 +20,13 @@ Load and Run MuJoCo 3.3.8 Models using JavaScript and the official MuJoCo WebAss
 
 - **MuJoCo 3.3.8 WebAssembly**: MuJoCo running entirely in the browser, works on any devices, even your phone.
 
-- **Hybrid Rendering**: Combine MuJoCo with photorealistic 3D Gaussian Splatting scenes imported from [World Labs](https://worldlabs.ai/)
+- **Hybrid Rendering**: Combine MuJoCo with photorealistic 3D Gaussian Splatting scenes, with physics objects correctly occlude and interact with 3DGS environments
 
 - **Toggle Mode**: Switch between pure physics rendering and hybrid 3DGS+physics mode
 
-- **Proper Occlusion**: Physics objects correctly occlude and interact with 3DGS environments
-
 - **Mouse Interaction**: Click and drag any physics object in the scene
+  
+- **Keyboard teleop**: End-effector teleop controller for SO101 (analytical) and Franka Panda (numerical, SGD)
 
 - **Import any robot**: By uploading the whole folder
   - The folder should only contain a single .xml, along with /assets folder
@@ -36,7 +36,7 @@ Load and Run MuJoCo 3.3.8 Models using JavaScript and the official MuJoCo WebAss
   
 - **Import any scene**: use any 3DGS scene you want
   - .spz file, recommend: [Marble from World Labs](https://marble.worldlabs.ai/)
-  - If you only upload the .spz file, there will not be any collision
+  - If you only upload the .spz file, there will not be any collision other than the floor
   - You can add a 3DGS scene along with an .xml file for collision setup
   
 <img width="1659" height="558" alt="image" src="https://github.com/user-attachments/assets/50807972-784d-4fa0-a4b3-a2920dff86c9" />
@@ -96,7 +96,7 @@ Easiest way to find collision boxes' coordinate: adding boxes in [the studio in 
 
 ## TODO
 
-- Add simple RL policy deployment (humanoid/dog walking/running, arms/mobile robot picking)
+- Add simple RL policy deployments (humanoid/dog walking/running, arms/mobile robot picking)
 
 ## JavaScript API
 
@@ -145,6 +145,7 @@ model.delete();
 ## 🙏 Acknowledgements
 
 This project is built based on [mujoco-wasm](https://github.com/zalo/mujoco_wasm) and [sparkjs](https://sparkjs.dev/).
+
 
 
 
