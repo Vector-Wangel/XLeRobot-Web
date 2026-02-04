@@ -4,9 +4,9 @@ Load and Run MuJoCo 3.3.8 Models using JavaScript and the official MuJoCo WebAss
 
 <table>
   <tr>
-    <td><img src="https://github.com/user-attachments/assets/e4dedf6d-8ec0-4a11-aaa4-5e4fd29a41a3" width="250"/></td>
+    <td><img src="https://github.com/user-attachments/assets/85466388-9868-4319-90bb-e40d331bcdfd" width="250"/></td>
     <td><img src="https://github.com/user-attachments/assets/4d398904-d2c3-4f95-b8dc-57d225317f8a" width="250"/></td>
-    <td><img src="https://github.com/user-attachments/assets/6f1e9b1e-f7b8-45d0-b563-1cc90d290a65" width="250"/></td>
+    <td><img src="https://github.com/user-attachments/assets/b41f6159-16c4-4c64-a104-a0ac65586b09" width="250"/></td>
   </tr>
   <tr>
     <td><img src="https://github.com/user-attachments/assets/17a240fe-b234-44a5-a5ab-c31875b1567c" width="250"/></td>
@@ -14,6 +14,8 @@ Load and Run MuJoCo 3.3.8 Models using JavaScript and the official MuJoCo WebAss
     <td><img src="https://github.com/user-attachments/assets/10bc5d06-a1f9-4e50-98b8-5df2dffb448f" width="250"/></td>
   </tr>
 </table>
+
+
 
 
 ## Features
@@ -145,6 +147,7 @@ model.delete();
 ## 🙏 Acknowledgements
 
 This project is built based on [mujoco-wasm](https://github.com/zalo/mujoco_wasm), [sparkjs](https://sparkjs.dev/), and [human policy viewer](https://github.com/Axellwppr/humanoid-policy-viewer).
+
 
 
 
