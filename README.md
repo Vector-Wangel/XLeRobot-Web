@@ -30,6 +30,8 @@ Load and Run MuJoCo 3.3.8 Models using JavaScript and the official MuJoCo WebAss
   
 - **Keyboard teleop**: End-effector teleop controller for SO101 (analytical) and Franka Panda (numerical, SGD)
 
+- **RL policy**: Run 10+ pretrained policies on Unitree G1 
+
 - **Import any robot**: By uploading the whole folder
   - The folder should only contain a single .xml, along with /assets folder
   - Find available robots at [MuJoCo Menagerie](https://github.com/google-deepmind/mujoco_menagerie))
@@ -147,6 +149,7 @@ model.delete();
 ## 🙏 Acknowledgements
 
 This project is built based on [mujoco-wasm](https://github.com/zalo/mujoco_wasm), [sparkjs](https://sparkjs.dev/), and [human policy viewer](https://github.com/Axellwppr/humanoid-policy-viewer).
+
 
 
 
