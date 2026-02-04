@@ -549,6 +549,18 @@ export async function setupGUI(parentContext) {
 
   // Add actuator sliders.
   let actuatorFolder = simulationFolder.addFolder("Actuators");
+  
+  // IK-controlled joint names (these are controlled by keyboard and can't be directly set by sliders)
+  const ikControlledJoints = [
+    // XLeRobot IK joints
+    'Pitch_L', 'Elbow_L', 'Wrist_Pitch_L', 
+    'Pitch_R', 'Elbow_R', 'Wrist_Pitch_R',
+    // SO101 IK joints
+    'Pitch', 'Elbow', 'Wrist_Pitch',
+    // Panda IK joints (all 7 arm actuators)
+    'actuator1', 'actuator2', 'actuator3', 'actuator4', 'actuator5', 'actuator6', 'actuator7'
+  ];
+  
   const addActuators = (model, data, params) => {
     let act_range = model.actuator_ctrlrange;
     let actuatorGUIs = [];
@@ -559,11 +571,32 @@ export async function setupGUI(parentContext) {
           parentContext.model.name_actuatoradr[i])).split(nullChar)[0];
 
       parentContext.params[name] = 0.0;
+      
+      // Use step size of 0.01 for better precision control
       let actuatorGUI = actuatorFolder.add(parentContext.params, name, act_range[2 * i], act_range[2 * i + 1], 0.01).name(name).listen();
+      
+      // Add note for IK-controlled joints and disable them
+      const isIKControlled = ikControlledJoints.includes(name);
+      if (isIKControlled) {
+        actuatorGUI.name(name + ' (IK)');
+      }
+      
       actuatorGUIs.push(actuatorGUI);
       actuatorGUI.onChange((value) => {
-        data.ctrl[i] = value;
+        // Don't allow changes to IK-controlled joints
+        if (isIKControlled) {
+          return;
+        }
+        // Round to 2 decimal places for display and control
+        const rounded = Math.round(value * 100) / 100;
+        parentContext.params[name] = rounded;
+        data.ctrl[i] = rounded;
       });
+      
+      // Disable after onChange to ensure it's applied
+      if (isIKControlled) {
+        actuatorGUI.disable();
+      }
     }
     return actuatorGUIs;
   };

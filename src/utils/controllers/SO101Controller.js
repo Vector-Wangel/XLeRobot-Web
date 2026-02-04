@@ -104,6 +104,25 @@ export class SO101Controller extends BaseController {
   }
 
   /**
+   * Check if an actuator is currently being controlled by keyboard input
+   * @param {number} actuatorIdx - Actuator index
+   * @param {object} keyStates - Current keyboard states
+   * @returns {boolean}
+   */
+  _isKeyControlling(actuatorIdx, keyStates) {
+    switch (actuatorIdx) {
+      case 0: return keyStates['KeyA'] || keyStates['KeyD'];  // Rotation
+      case 1: case 2: case 3:  // IK joints (controlled together)
+        return keyStates['KeyW'] || keyStates['KeyS'] ||  // X position
+               keyStates['KeyQ'] || keyStates['KeyE'] ||  // Y position
+               keyStates['KeyR'] || keyStates['KeyF'];     // Pitch
+      case 4: return keyStates['KeyZ'] || keyStates['KeyC'];  // Wrist roll
+      case 5: return keyStates['KeyV'];  // Gripper
+      default: return false;
+    }
+  }
+
+  /**
    * 异步控制步进 - 每个控制周期调用一次
    * @param {object} keyStates - Current keyboard states
    * @param {object} model - MuJoCo model
@@ -113,6 +132,15 @@ export class SO101Controller extends BaseController {
   async step(keyStates, model, data, _mujoco) {
     if (!this.initialized || !this.state) {
       await this.initialize(model, data, _mujoco);
+    }
+
+    // ========================================
+    // SYNC: Read external control inputs (from sliders) for non-active controls
+    // ========================================
+    for (let i = 0; i < 6; i++) {
+      if (!this._isKeyControlling(i, keyStates)) {
+        this.state.targetJoints[i] = data.ctrl[i];
+      }
     }
 
     // Decrement gripper cooldown

@@ -36,7 +36,7 @@ export class XLeRobotController extends BaseController {
     this.EE_STEP = 0.0002;      // 0.005 / 8
     this.PITCH_STEP = 0.0025;   // 0.02 / 8
     this.TIP_LENGTH = 0.108;    // Length from wrist to end effector tip
-    this.BASE_SPEED = 2;
+    this.BASE_SPEED = 1;        // Matches actuator ctrlrange (-1 to 1)
 
     // Gripper positions
     this.GRIPPER_OPEN = 1.5;
@@ -74,6 +74,9 @@ export class XLeRobotController extends BaseController {
 
       // Gripper states (false = closed, true = open)
       gripperOpen: [false, false],
+      
+      // Track previous keyboard state for base motors (to know when to reset to 0)
+      prevKeyboardActive: [false, false],
     };
 
     // Set initial joint positions
@@ -130,6 +133,36 @@ export class XLeRobotController extends BaseController {
   }
 
   /**
+   * Check if an actuator is currently being controlled by keyboard input
+   * @param {number} actuatorIdx - Actuator index
+   * @param {object} keyStates - Current keyboard states
+   * @returns {boolean}
+   */
+  _isKeyControlling(actuatorIdx, keyStates) {
+    switch (actuatorIdx) {
+      case 0: return keyStates['KeyS'] || keyStates['KeyW'];  // Base forward/backward
+      case 1: return keyStates['KeyA'] || keyStates['KeyD'];  // Base turn
+      case 2: return keyStates['Digit7'] || keyStates['KeyY'];  // Left rotation
+      case 3: case 4: case 5:  // Left arm IK joints (always controlled together)
+        return keyStates['Digit8'] || keyStates['KeyU'] ||  // Y position
+               keyStates['Digit9'] || keyStates['KeyI'] ||  // X position
+               keyStates['Digit0'] || keyStates['KeyO'];     // Pitch
+      case 6: return keyStates['Minus'] || keyStates['KeyP'];  // Left wrist roll
+      case 7: return keyStates['KeyV'];  // Left gripper
+      case 8: return keyStates['KeyH'] || keyStates['KeyN'];  // Right rotation
+      case 9: case 10: case 11:  // Right arm IK joints (always controlled together)
+        return keyStates['KeyJ'] || keyStates['KeyM'] ||  // Y position
+               keyStates['KeyK'] || keyStates['Comma'] ||  // X position
+               keyStates['KeyL'] || keyStates['Period'];   // Pitch
+      case 12: return keyStates['Semicolon'] || keyStates['Slash'];  // Right wrist roll
+      case 13: return keyStates['KeyB'];  // Right gripper
+      case 14: return keyStates['KeyR'] || keyStates['KeyT'];  // Head pan
+      case 15: return keyStates['KeyF'] || keyStates['KeyG'];  // Head tilt
+      default: return false;
+    }
+  }
+
+  /**
    * 异步控制步进 - 每个控制周期调用一次
    * @param {object} keyStates - Current keyboard states
    * @param {object} model - MuJoCo model
@@ -141,6 +174,15 @@ export class XLeRobotController extends BaseController {
       await this.initialize(model, data, _mujoco);
     }
 
+    // ========================================
+    // SYNC: Read external control inputs (from sliders) for non-active controls
+    // ========================================
+    for (let i = 2; i < 16; i++) {
+      if (!this._isKeyControlling(i, keyStates)) {
+        this.state.targetJoints[i] = data.ctrl[i];
+      }
+    }
+
     // Decrement gripper cooldowns
     if (this.state.gripperCooldown[0] > 0) this.state.gripperCooldown[0]--;
     if (this.state.gripperCooldown[1] > 0) this.state.gripperCooldown[1]--;
@@ -150,21 +192,37 @@ export class XLeRobotController extends BaseController {
     // ========================================
 
     // Forward/Backward (W/S)
+    const forwardKeyActive = keyStates['KeyS'] || keyStates['KeyW'];
     if (keyStates['KeyS']) {
       data.ctrl[0] = this.BASE_SPEED;
+      this.state.prevKeyboardActive[0] = true;
     } else if (keyStates['KeyW']) {
       data.ctrl[0] = -this.BASE_SPEED;
+      this.state.prevKeyboardActive[0] = true;
     } else {
-      data.ctrl[0] = 0;
+      // If keyboard was just released, reset to 0
+      // Otherwise keep current value (allows slider control)
+      if (this.state.prevKeyboardActive[0]) {
+        data.ctrl[0] = 0;
+      }
+      this.state.prevKeyboardActive[0] = false;
     }
 
     // Turn Left/Right (A/D)
+    const turnKeyActive = keyStates['KeyA'] || keyStates['KeyD'];
     if (keyStates['KeyA']) {
       data.ctrl[1] = this.BASE_SPEED;
+      this.state.prevKeyboardActive[1] = true;
     } else if (keyStates['KeyD']) {
       data.ctrl[1] = -this.BASE_SPEED;
+      this.state.prevKeyboardActive[1] = true;
     } else {
-      data.ctrl[1] = 0;
+      // If keyboard was just released, reset to 0
+      // Otherwise keep current value (allows slider control)
+      if (this.state.prevKeyboardActive[1]) {
+        data.ctrl[1] = 0;
+      }
+      this.state.prevKeyboardActive[1] = false;
     }
 
     // ========================================

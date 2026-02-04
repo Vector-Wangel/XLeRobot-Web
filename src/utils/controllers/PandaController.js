@@ -494,6 +494,17 @@ export class PandaController extends BaseController {
   }
 
   /**
+   * Check if any position/orientation keyboard control is active
+   * @param {object} keyStates - Current keyboard states
+   * @returns {boolean}
+   */
+  _isKeyControllingPose(keyStates) {
+    return keyStates['KeyW'] || keyStates['KeyS'] || keyStates['KeyA'] || keyStates['KeyD'] ||
+           keyStates['KeyQ'] || keyStates['KeyE'] || keyStates['KeyZ'] || keyStates['KeyC'] ||
+           keyStates['KeyR'] || keyStates['KeyF'] || keyStates['KeyT'] || keyStates['KeyG'];
+  }
+
+  /**
    * 异步控制步进 - 每个控制周期调用一次
    */
   async step(keyStates, model, data, mujoco) {
@@ -505,6 +516,16 @@ export class PandaController extends BaseController {
     // Store mujoco reference in case it wasn't set during init
     if (!this.mujoco && mujoco) {
       this.mujoco = mujoco;
+    }
+
+    // ========================================
+    // SYNC: If no keyboard control is active, sync cached control from sliders
+    // ========================================
+    if (!this._isKeyControllingPose(keyStates)) {
+      // Read current control values from sliders
+      for (let i = 0; i < this.ARM_JOINT_INDICES.length; i++) {
+        this.cachedCtrl[i] = data.ctrl[i];
+      }
     }
 
     // ========================================
@@ -548,6 +569,13 @@ export class PandaController extends BaseController {
     // ========================================
     // Gripper Control
     // ========================================
+    // Sync gripper state from slider if not using keyboard
+    if (!keyStates['KeyV'] && !keyStates['KeyB']) {
+      // If slider moved the gripper, update our state to match
+      const currentGripperValue = data.ctrl[this.GRIPPER_ACTUATOR_IDX_1];
+      this.state.gripperOpen = currentGripperValue > (this.GRIPPER_OPEN + this.GRIPPER_CLOSED) / 2;
+    }
+    
     if (keyStates['KeyV']) this.state.gripperOpen = true;
     if (keyStates['KeyB']) this.state.gripperOpen = false;
 

@@ -290,6 +290,27 @@ export class MuJoCoDemo {
     return policyController.getPlaybackState();
   }
 
+  syncGUIFromControls() {
+    if (!this.model || !this.data) return;
+    
+    // Update GUI params to match current control values
+    // This makes sliders reflect keyboard control changes
+    let textDecoder = new TextDecoder("utf-8");
+    let nullChar = textDecoder.decode(new ArrayBuffer(1));
+    
+    for (let i = 0; i < this.model.nu; i++) {
+      if (!this.model.actuator_ctrllimited[i]) { continue; }
+      let name = textDecoder.decode(
+        this.model.names.subarray(
+          this.model.name_actuatoradr[i])).split(nullChar)[0];
+      
+      if (name in this.params) {
+        // Round to 2 decimal places for display
+        this.params[name] = Math.round(this.data.ctrl[i] * 100) / 100;
+      }
+    }
+  }
+
   render(timeMS) {
     this.controls.update();
 
@@ -351,6 +372,9 @@ export class MuJoCoDemo {
           this.policySubstep++;
           this.mujoco_time += timestep * 1000.0;
         }
+        
+        // Sync GUI slider values to match policy control (read-only display)
+        this.syncGUIFromControls();
       } else {
         // Normal keyboard control mode
         while (this.mujoco_time < timeMS) {
@@ -362,7 +386,6 @@ export class MuJoCoDemo {
             let currentCtrl = this.data.ctrl;
             for (let i = 0; i < currentCtrl.length; i++) {
               currentCtrl[i] = rate * currentCtrl[i] + scale * standardNormal();
-              this.params["Actuator " + i] = currentCtrl[i];
             }
           }
 
@@ -391,6 +414,9 @@ export class MuJoCoDemo {
 
           this.mujoco_time += timestep * 1000.0;
         }
+
+        // Sync GUI slider values to match current control values (for keyboard/slider hybrid control)
+        this.syncGUIFromControls();
       }
 
     } else if (this.params["paused"]) {

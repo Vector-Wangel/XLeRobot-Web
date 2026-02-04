@@ -47,6 +47,7 @@ export class KeyboardController {
     // Bind event handlers
     this._onKeyDown = this._onKeyDown.bind(this);
     this._onKeyUp = this._onKeyUp.bind(this);
+    this._onBlur = this._onBlur.bind(this);
   }
 
   /**
@@ -109,6 +110,7 @@ export class KeyboardController {
     // Add event listeners
     document.addEventListener('keydown', this._onKeyDown);
     document.addEventListener('keyup', this._onKeyUp);
+    window.addEventListener('blur', this._onBlur);
 
     this.enabled = true;
     console.log(`Keyboard control enabled for robot: ${robotName}`);
@@ -123,6 +125,7 @@ export class KeyboardController {
 
     document.removeEventListener('keydown', this._onKeyDown);
     document.removeEventListener('keyup', this._onKeyUp);
+    window.removeEventListener('blur', this._onBlur);
 
     this.enabled = false;
     this.config = null;
@@ -174,6 +177,16 @@ export class KeyboardController {
     if (event.code in this.keyStates) {
       this.keyStates[event.code] = false;
       event.preventDefault();
+    }
+  }
+
+  _onBlur() {
+    if (!this.enabled) return;
+    
+    // Reset all key states when window loses focus
+    // This prevents stuck keys when user clicks outside the window
+    for (const key in this.keyStates) {
+      this.keyStates[key] = false;
     }
   }
 }
